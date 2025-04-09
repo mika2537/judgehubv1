@@ -24,6 +24,7 @@ export async function POST(request) {
       email,
       password: hashedPassword,
       createdAt: new Date(),
+      userImage: "",
     });
 
     return new Response(JSON.stringify({ success: true }), {

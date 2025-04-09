@@ -1,7 +1,9 @@
 // pages/api/events/[id]/vote.js
-import { connectToDatabase } from "../../../../lib/mongodb";
+import { connectToDatabase } from "@/lib/mongodb";
+import { ObjectId } from "mongodb";
 
 export default async function handler(req, res) {
+  console.log("req :>> ", req);
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method not allowed" });
   }
@@ -14,7 +16,7 @@ export default async function handler(req, res) {
 
     // Update each team's ratings
     const updates = Object.entries(ratings).map(([teamId, rating]) => {
-      return db.collection("hha").updateOne(
+      return db.collection("ratings").updateOne(
         { _id: id, "teams.id": teamId },
         {
           $inc: {
@@ -29,14 +31,14 @@ export default async function handler(req, res) {
     await Promise.all(updates);
 
     // Calculate new average ratings
-    const event = await db.collection("hha").findOne({ _id: id });
+    const event = await db.collection("events").findOne({ _id: id });
     const updatedTeams = event.teams.map((team) => {
       const averageRating = team.totalPoints / team.ratingsCount;
       return { ...team, averageRating };
     });
 
     await db
-      .collection("hha")
+      .collection("teams")
       .updateOne({ _id: id }, { $set: { teams: updatedTeams } });
 
     res.status(200).json({ success: true });

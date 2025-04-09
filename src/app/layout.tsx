@@ -1,27 +1,23 @@
-"use client"; // This must be at the top
+"use client";
 
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
-import { SessionProvider } from "next-auth/react";
+import AppHeader from "@/app/components/header";
+import SessionProviderWrapper from "@/app/components/SessionProviderWrapper";
+import { usePathname } from 'next/navigation';
 
-export default function AuthGuard({ children }: { children: React.ReactNode }) {
-  const router = useRouter();
+export default function Layout({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
+  const isAuthPage = pathname === '/login' ; // Add other auth pages if needed
 
-  useEffect(() => {
-    const userLoggedIn = localStorage.getItem("auth_token");
-
-    if (!userLoggedIn) {
-      router.push("/login");
-    }
-  }, []);
-
-  return <html>
-    <body>
-      <SessionProvider>
-        
-    {children}
-
-      </SessionProvider>
-    </body>
-    </html>;
+  return (
+    <html lang="en">
+      <body className="bg-gray-100">
+        <SessionProviderWrapper>
+          {!isAuthPage && <AppHeader />}
+          <main className="min-h-screen">
+            {children}
+          </main>
+        </SessionProviderWrapper>
+      </body>
+    </html>
+  );
 }
