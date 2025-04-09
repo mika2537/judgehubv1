@@ -20,7 +20,7 @@ export async function GET(request, { params }) {
     const { db } = await connectToDatabase();
 
     // 1. Get the event document
-    const event = await db.collection("hha").findOne({
+    const event = await db.collection("events").findOne({
       _id: new ObjectId(id),
     });
 
@@ -33,7 +33,7 @@ export async function GET(request, { params }) {
     // 2. Get all referenced teams
     const teamIds = event.teams.map((t) => new ObjectId(t.$oid));
     const teams = await db
-      .collection("hha2")
+      .collection("teams")
       .find({
         _id: { $in: teamIds },
       })

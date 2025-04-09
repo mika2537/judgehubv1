@@ -4,7 +4,16 @@ import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import MatchList from "@/app/components/matchList";
-import { Match } from "/types/Match";
+
+// Define or import the Match type
+type Match = {
+  id: string;
+  teamA: string;
+  teamB: string;
+  scoreA: number;
+  scoreB: number;
+  date: string;
+};
 
 export default function Home() {
   const { data: session, status } = useSession();
@@ -32,7 +41,7 @@ export default function Home() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("/api/matches");
+      const response = await fetch("/api/events");
       if (!response.ok) {
         throw new Error(`Failed to fetch matches: ${response.status}`);
       }

@@ -1,18 +1,6 @@
 // app/api/events/route.ts
 import { Db, MongoClient } from 'mongodb';
-
-interface Event {
-  title: string;
-  startTime: string;
-  endTime: string;
-  eventType: string;
-  status: string;
-  sportType?: string;
-  teams?: string;
-  totalVotes?: number;
-  recentComments?: number;
-  coverImage?: string;
-}
+import { Event } from '@/app/types/index';
 
 async function connectToDatabaseLocal(): Promise<{ db: Db; client: MongoClient }> {
   if (!process.env.MONGODB_URI) {

@@ -1,9 +1,13 @@
 
 import { Db, MongoClient } from "mongodb";
 
+const uri = process.env.MONGODB_URI;
+const options = {};
 
+let client;
+let clientPromise;
 
-export async function connectToDatabase() {
+export async function connectToDb() {
 
   if (!process.env.MONGODB_URI) {
     throw new Error("MongoDB URI is not defined in the environment variables.");
@@ -16,12 +20,6 @@ export async function connectToDatabase() {
 
 }
 
-
-const uri = process.env.MONGODB_URI;
-const options = {};
-
-let client;
-let clientPromise;
 
 if (!process.env.MONGODB_URI) {
   throw new Error("Please add your Mongo URI to .env.local");

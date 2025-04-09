@@ -1,20 +1,32 @@
-// pages/api/events/[id].js
-import { connectToDatabase } from "../../../lib/mongodb";
+// pages/api/matches/[id].ts
 
-export default async function handler(req, res) {
+import { connectToDatabase } from "@/utils/mongodb";
+import { NextApiRequest, NextApiResponse } from "next";
+
+export default async function handler(req: NextApiRequest, res: Nextesponse) {
   const { id } = req.query;
+  const { db } = await connectToDatabase();
 
-  try {
-    const { db } = await connectToDatabase();
-    const event = await db.collection("hha").findOne({ _id: id });
+  if (req.method === "POST") {
+    const { ratings } = req.body;
 
-    if (!event) {
-      return res.status(404).json({ message: "Event not found" });
+    try {
+      const voteRecord = {
+        matchId: id,
+        ratings, // { teamId: rating }
+        createdAt: new Date(),
+      };
+
+      await db.collection("votes").insertOne(voteRecord);
+      res.status(200).json({ message: "Vote submitted" });
+    } catch (err) {
+      console.error("Error saving vote:", err);
+      res.status(500).json({ error: "Failed to save vote" });
     }
-
-    res.status(200).json(event);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error fetching event" });
+  } else if (req.method === "GET") {
+    // You already handle GET for match details
+  } else {
+    res.setHeader("Allow", ["POST", "GET"]);
+    res.status(405).end(`Method ${req.method} Not Allowed`);
   }
 }

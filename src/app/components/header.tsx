@@ -20,7 +20,7 @@ export default function AppHeader() {
           className="flex items-center hover:opacity-80 transition-opacity"
         >
           <Image
-            src="/eventImage/championship-finals.png"
+            src="/favicon.ico"
             alt="App Logo"
             width={40}
             height={40}
