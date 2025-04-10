@@ -1,5 +1,4 @@
-
-import { Db, MongoClient } from "mongodb";
+import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI;
 const options = {};
@@ -8,18 +7,16 @@ let client;
 let clientPromise;
 
 export async function connectToDb() {
-
   if (!process.env.MONGODB_URI) {
     throw new Error("MongoDB URI is not defined in the environment variables.");
   }
+
   const client = await MongoClient.connect(process.env.MONGODB_URI);
 
   const db = client.db(process.env.MONGODB_DB);
 
   return { client, db };
-
 }
-
 
 if (!process.env.MONGODB_URI) {
   throw new Error("Please add your Mongo URI to .env.local");
