@@ -35,20 +35,31 @@ export interface Match {
     };
   }
   
-  export interface MatchDetails {
-    id: string;
-    title: string;
-    date: string;
-    location: string;
-    teams: Team[];
-    description: string;
-    totalVotes: number;
-    matchStats: {
-      
-      mostRatedTeam: string;
-      recentComments: number;
-    };
-  }
+// app/types.ts
+export interface RatingCategory {
+  id: string;
+  name: string;
+  description: string;
+}
+
+export interface TeamRating {
+  categoryId: string;
+  rating: number;
+}
+
+export interface MatchDetails {
+  id: string;
+  title: string;
+  description: string;
+  location: string;
+  date: string;
+  totalVotes: number;
+  teams: any[];
+  matchStats: {
+    mostRatedTeam: string;
+    recentComments: number;
+  };
+}
   export interface MatchHeaderProps {
     title: string;
     date: string;
@@ -57,28 +68,13 @@ export interface Match {
     description: string;
   }
   export interface TeamCardProps {
-    team: {
-      id: string;
-      name: string;
-      shortName: string;
-      logo: string;
-      color: string;
-      totalPoints?: number;
-      ratingsCount?: number;
-      players?: string[];
-      stats?: {
-        wins: number;
-        losses: number;
-        draws: number;
-        goalsFor: number;
-        goalsAgainst: number;
-      };
-    };
-    rating?: number;
+    team: any;
+    categories: RatingCategory[];
+    ratings: Record<string, number>;
     hasVoted: boolean;
-    onRatingChange: (teamId: string, rating: number) => void;
+    onRatingChange: (teamId: string, categoryId: string, rating: number) => void;
   }
-
+  
 export interface Event {
     title: string;
     startTime: string;

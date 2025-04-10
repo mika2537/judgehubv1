@@ -1,4 +1,3 @@
-// app/api/events/route.ts
 import { Db, MongoClient } from 'mongodb';
 import { Event } from '@/app/types/index';
 
@@ -36,6 +35,19 @@ export async function POST(req: Request) {
 
     const { db } = await connectToDatabaseLocal();
     const eventsCollection = db.collection<Event>('events');
+    const teamsCollection = db.collection('teams');
+
+    if (Array.isArray(requestBody.teams)) {
+      await Promise.all(requestBody.teams.map(async (teamId: string) => {
+        if (typeof teamId === 'string' && teamId.trim()) {
+          await teamsCollection.updateOne(
+            { _id: teamId },
+            { $setOnInsert: { _id: teamId, createdAt: new Date().toISOString() } },
+            { upsert: true }
+          );
+        }
+      }));
+    }
 
     const newEvent: Event = {
       title,
@@ -44,10 +56,15 @@ export async function POST(req: Request) {
       eventType,
       status,
       sportType: requestBody.sportType,
-      teams: requestBody.teams,
+      teams: requestBody.teams || [], // Updated to an empty array
       totalVotes: requestBody.totalVotes || 0,
       recentComments: requestBody.recentComments || 0,
       coverImage: requestBody.coverImage,
+      description: requestBody.description || '',
+      location: requestBody.location || '',
+      featuredParticipant: requestBody.featuredParticipant || '',
+      createdAt: new Date(requestBody.createdAt).toISOString(),
+      updatedAt: new Date(requestBody.updatedAt).toISOString(),
     };
 
     const result = await eventsCollection.insertOne(newEvent);

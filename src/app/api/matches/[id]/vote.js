@@ -16,7 +16,7 @@ export default async function handler(req, res) {
 
     // Update each team's ratings
     const updates = Object.entries(ratings).map(([teamId, rating]) => {
-      return db.collection("ratings").updateOne(
+      return db.collection("ratingCategories").updateOne(
         { _id: id, "teams.id": teamId },
         {
           $inc: {
