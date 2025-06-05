@@ -17,7 +17,7 @@ export async function GET(request, { params }) {
       );
     }
 
-    const { db } = await connectToDatabase();
+    const { db } = await connectToDb();
 
     // 1. Get the event document
     const event = await db.collection("events").findOne({
