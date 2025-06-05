@@ -1,6 +1,8 @@
 "use client";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import { RatingCategory } from "@/app/types";
+import { useSession } from "next-auth/react";
+import { useEffect } from "react";
 
 interface Props {
   team: any;
@@ -21,6 +23,7 @@ export default function TeamRatingCard({
   hasVoted,
   categories
 }: Props) {
+
   return (
     <div className="bg-white rounded-lg shadow overflow-hidden">
       <button
