@@ -1,22 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
-import mongoose, { Schema, Types, Document, models, model } from "mongoose";
+import { authOptions } from "@/app/pages/login/control/authOptions"; // Adjust the import path as necessary
+import { connectToDb } from "@/lib/mongodb"; 
 
-// Define ScoreModel if not imported from elsewhere
-const ScoreSchema = new Schema({
-  judgeId: { type: String, required: true },
-  competitionId: { type: String, required: true },
-  participantId: { type: String, required: true },
-});
+interface Participant {
+  id: string;
+  name: string;
+  performance: string;
+}
 
-const ScoreModel = models.Score || model("Score", ScoreSchema);
-import { connectToDb } from "@/lib/mongodb";
-import { MongoClient } from "mongodb";
-const uri = process.env.MONGODB_URI!;
-const client = new MongoClient(uri);
+interface Criterion {
+  id: string;
+  name: string;
+  weight: number;
+}
 
-export async function GET(req: NextRequest) {
+interface Competition {
+  _id: string;
+  name: string;
+  status: string;
+  participants: Participant[];
+  criteria: Criterion[];
+}
+
+interface Score {
+  competitionId: string;
+  participantId: string;
+}
+export async function GET(_req: NextRequest) {
   try {
     type SessionUser = {
       id: string;
@@ -33,50 +44,45 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ message: "Forbidden: Insufficient permissions" }, { status: 403 });
     }
 
-    await connectToDb();
+    const { db } = await connectToDb();
 
-    // const competitions = await CompetitionModel.find();
-
-    await client.connect();
-    const db = client.db("judgehub");
     const competitions = await db.collection("competitions").find({}).toArray();
-
-    console.log('competitions',competitions);
-
-    if (competitions.length <= 0) {
+    if (competitions.length === 0) {
       return NextResponse.json([]);
     }
 
-    const scores = await ScoreModel.find({ judgeId })
-      .select("competitionId participantId -_id")
-      .lean();
+    const scores: Score[] = await db
+      .collection("scores")
+      .find({ judgeId })
+      .project({ competitionId: 1, participantId: 1, _id: 0 })
+      .toArray();
 
-    const formattedCompetitions = competitions.map((comp) => {
-      const scoredParticipantIds = scores
-        .filter((score) => score.competitionId === comp._id.toString())
-        .map((score) => score.participantId);
-
-      return {
-        _id: comp._id.toString(),
-        name: comp.name,
-        status: comp.status,
-        participants: comp.participants.map((p) => ({
-          id: p.id,
-          name: p.name,
-          performance: p.performance,
-        })),
-        criteria: comp.criteria.map((c) => ({
-          id: c.id,
-          name: c.name,
-          weight: c.weight,
-        })),
-        scoredParticipantIds,
-      };
-    });
+      const formattedCompetitions = competitions.map((comp: Competition) => {
+        const scoredParticipantIds = scores
+          .filter((score: Score) => score.competitionId === comp._id)
+          .map((score) => score.participantId);
+      
+        return {
+          _id: comp._id,
+          name: comp.name,
+          status: comp.status,
+          participants: comp.participants.map((p: Participant) => ({
+            id: p.id,
+            name: p.name,
+            performance: p.performance,
+          })),
+          criteria: comp.criteria.map((c: Criterion) => ({
+            id: c.id,
+            name: c.name,
+            weight: c.weight,
+          })),
+          scoredParticipantIds,
+        };
+      });
 
     return NextResponse.json(formattedCompetitions);
   } catch (error) {
-    console.error("Error in /api/judge route:", error);
-    return NextResponse.json({ message: "Internal server error" }, { status: 500 });
+    console.error("Error in /api/judge route:", error );
+    return NextResponse.json({ message: "Internal server error" ,_req}, { status: 500 });
   }
 }

@@ -81,7 +81,7 @@ export default function CompetitionPage() {
         throw new Error('Invalid response format: Expected an array');
       }
 
-      const formattedData: Competition[] = data.map((item: any) => ({
+      const formattedData: Competition[] = data.map((item: Partial<Competition>) => ({
         _id: item._id?.toString(),
         name: item.name || 'Unnamed Competition',
         description: item.description || '',
@@ -93,25 +93,25 @@ export default function CompetitionPage() {
           : new Date().toISOString().split('T')[0],
         status: item.status || 'Upcoming',
         participants: Array.isArray(item.participants)
-          ? item.participants.map((p: any) => ({
-              id: p.id || crypto.randomUUID(),
-              name: p.name || 'Unnamed Participant',
-            }))
-          : [],
-        judges: Array.isArray(item.judges)
-          ? item.judges.map((j: any) => ({
-              id: j.id || crypto.randomUUID(),
-              name: j.name || 'Unnamed Judge',
-              email: j.email || '',
-            }))
-          : [],
-        criteria: Array.isArray(item.criteria)
-          ? item.criteria.map((c: any) => ({
-              id: c.id || crypto.randomUUID(),
-              name: c.name || '',
-              weight: Number(c.weight) || 0,
-            }))
-          : [],
+  ? item.participants.map((p: { id?: string; name?: string }) => ({
+      id: p.id || crypto.randomUUID(),
+      name: p.name || 'Unnamed Participant',
+    }))
+  : [],
+  judges: Array.isArray(item.judges)
+  ? item.judges.map((j: { id?: string; name?: string; email?: string }) => ({
+      id: j.id || crypto.randomUUID(),
+      name: j.name || 'Unnamed Judge',
+      email: j.email || '',
+    }))
+  : [],
+  criteria: Array.isArray(item.criteria)
+  ? item.criteria.map((c: { id?: string; name?: string; weight?: number }) => ({
+      id: c.id || crypto.randomUUID(),
+      name: c.name || '',
+      weight: Number(c.weight) || 0,
+    }))
+  : [],
       }));
 
       setCompetitions(formattedData);

@@ -8,13 +8,10 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/app/components/ui/button";
 import {
-  Trophy,
   Home,
   Gavel,
   BarChart3,
   Settings,
-  Moon,
-  Sun,
   LogOut,
   Menu,
   X,

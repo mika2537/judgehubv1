@@ -1,4 +1,3 @@
-import { NextApiRequest, NextApiResponse } from "next";
 import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI || "";

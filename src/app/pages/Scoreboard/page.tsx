@@ -2,7 +2,7 @@
 
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   Card,
   CardHeader,
@@ -48,26 +48,17 @@ interface ScoreboardEntry {
 }
 
 export default function Scoreboard() {
-  const { data: session, status } = useSession();
+  const { status } = useSession();
   const router = useRouter();
   const [selectedCompetition, setSelectedCompetition] = useState<string | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [leaderboard, setLeaderboard] = useState<ScoreboardEntry[]>([]);
-  const [isLive, setIsLive] = useState(true);
+  const [isLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Redirect unauthenticated users
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/pages/login");
-    } else if (status === "authenticated") {
-      fetchCompetitions();
-    }
-  }, [status, router]);
-
   // Fetch competitions
-  const fetchCompetitions = async () => {
+  const fetchCompetitions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -85,10 +76,10 @@ export default function Scoreboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   // Fetch scoreboard
-  const fetchScoreboard = async () => {
+  const fetchScoreboard = useCallback(async () => {
     if (!selectedCompetition) return;
     try {
       setLoading(true);
@@ -110,19 +101,28 @@ export default function Scoreboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCompetition]);
+
+  // Redirect unauthenticated users
+  useEffect(() => {
+    if (status === "unauthenticated") {
+      router.push("/pages/login");
+    } else if (status === "authenticated") {
+      fetchCompetitions();
+    }
+  }, [status, router, fetchCompetitions]);
 
   // Fetch scoreboard when selectedCompetition changes
   useEffect(() => {
     fetchScoreboard();
-  }, [selectedCompetition]);
+  }, [fetchScoreboard, selectedCompetition]);
 
   // Live updates
   useEffect(() => {
     if (!isLive || !selectedCompetition) return;
     const interval = setInterval(fetchScoreboard, 5000);
     return () => clearInterval(interval);
-  }, [isLive, selectedCompetition]);
+  }, [isLive, selectedCompetition, fetchScoreboard]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {

@@ -1,5 +1,6 @@
-require("dotenv").config();
-const { MongoClient, ObjectId } = require("mongodb");
+import dotenv from "dotenv";
+import { MongoClient, ObjectId } from "mongodb";
+dotenv.config();
 
 const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
 const dbName = process.env.MONGODB_DB || "judgehub";

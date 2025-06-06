@@ -10,7 +10,7 @@ import { Slider } from "@/app/components/ui/slider";
 import { Textarea } from "@/app/components/ui/textarea";
 import { Star, Send, Clock, User, ArrowLeft, CheckCircle } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
-import { Competition, Criterion, Participant } from "@/lib/types";
+import { Competition, Participant } from "@/lib/types";
 
 declare module "next-auth" {
   interface User {
@@ -117,7 +117,7 @@ const Judge = () => {
         setSelectedParticipantIndex(participantIndex);
       }
     }
-  }, [competitions, selectedCompetitionIndex]);
+  }, [competitions, selectedCompetitionIndex, selectedParticipantIndex]);
 
   const competition = competitions[selectedCompetitionIndex];
   const participant = Array.isArray(competition?.participants)
@@ -161,7 +161,7 @@ const Judge = () => {
     }, 0);
 
     try {
-      const response = await fetch("/api/scores", {
+      await fetch("/api/scores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

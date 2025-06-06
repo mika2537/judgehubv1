@@ -1,5 +1,12 @@
 import Image from "next/image";
-import { MatchHeaderProps } from "@/app/types";
+
+interface MatchHeaderProps {
+  title: string;
+  date: string;
+  location: string;
+  totalVotes: number;
+  description: string;
+}
   
   export default function MatchHeader({
     title,

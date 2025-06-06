@@ -11,10 +11,7 @@ if (!uri) {
 
 let client;
 let clientPromise;
-
-// eslint-disable-next-line no-var
-global._mongoClientPromise = global._mongoClientPromise || null;
-
+// Removed TypeScript-specific global declaration
 if (process.env.NODE_ENV === "development") {
   // In dev, use global var to preserve connection across reloads
   if (!global._mongoClientPromise) {

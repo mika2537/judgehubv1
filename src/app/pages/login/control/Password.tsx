@@ -10,7 +10,9 @@ export const Password: FC<PasswordProps> = memo((props) => {
 
   const key = (keyname || name) as string;
 
-  useEffect(() => dispatch({ [`$${key}`]: label }), [label]);
+  useEffect(() => {
+    dispatch({ [`$${key}`]: label });
+  }, [dispatch, key, label]);
 
   return (
     <Input

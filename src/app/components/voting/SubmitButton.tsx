@@ -1,6 +1,14 @@
 // components/voting/SubmitButton.tsx
 import { Loader2 } from "lucide-react";
-import { SubmitButtonProps } from "@/app/types";
+
+interface SubmitButtonProps {
+  canVote: boolean;
+  isSubmitting: boolean;
+  hasVoted: boolean;
+  onSubmit: () => void;
+  totalTeams: number;
+  ratedTeams: number;
+}
 
 export default function SubmitButton({
   canVote,

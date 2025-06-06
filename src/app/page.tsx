@@ -1,8 +1,7 @@
 "use client";
 
 import { useSession } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import {
   Card,
   CardContent,
@@ -12,6 +11,7 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Trophy, Users, Star, BarChart3, Calendar, Clock } from "lucide-react";
 import Link from "next/link";
+import DashboardRedirect from "@/app/DashboardRedirect";
 
 // Extend Session type to include role
 declare module "next-auth" {
@@ -22,6 +22,20 @@ declare module "next-auth" {
       role?: string | null;
     };
   }
+}
+
+// API item type to replace `any`
+interface CompetitionApiItem {
+  _id?: string;
+  name?: string;
+  teamA?: string;
+  teamB?: string;
+  scoreA?: number | null;
+  scoreB?: number | null;
+  status?: string;
+  participants?: unknown[];
+  judges?: unknown[];
+  endDate?: string;
 }
 
 // Competition type
@@ -40,25 +54,19 @@ type Competition = {
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
-  const router = useRouter();
-  const searchParams = useSearchParams();
 
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [totalJudges, setTotalJudges] = useState<number>(0);
-  const [submissionsToday, setSubmissionsToday] = useState<number>(0);
+  const [submissionsToday] = useState<number>(0);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      const redirectTo = searchParams?.get("redirect") || "/dashboard";
-      sessionStorage.setItem("loginRedirect", redirectTo);
-      router.push("/login");
-    } else if (status === "authenticated") {
+    if (status === "authenticated") {
       fetchCompetitions();
       fetchJudgeCount();
     }
-  }, [status, router, searchParams]);
+  }, [status]);
 
   const fetchCompetitions = async () => {
     try {
@@ -70,15 +78,21 @@ export default function DashboardPage() {
       }
       const data = await response.json();
       const formattedData: Competition[] = data
-        .map((item: any) => ({
+        .map((item: CompetitionApiItem) => ({
           id: item._id?.toString() || Math.random().toString(36).substring(2, 9),
-          name: item.name || (item.teamA && item.teamB ? `${item.teamA} vs ${item.teamB}` : "Unnamed Competition"),
+          name:
+            item.name ||
+            (item.teamA && item.teamB
+              ? `${item.teamA} vs ${item.teamB}`
+              : "Unnamed Competition"),
           teamA: item.teamA,
           teamB: item.teamB,
           scoreA: item.scoreA ?? null,
           scoreB: item.scoreB ?? null,
           status: item.status || "Upcoming",
-          participants: Array.isArray(item.participants) ? item.participants.length : 0,
+          participants: Array.isArray(item.participants)
+            ? item.participants.length
+            : 0,
           judges: Array.isArray(item.judges) ? item.judges.length : 0,
           endDate: item.endDate
             ? new Date(item.endDate).toLocaleDateString("en-US", {
@@ -108,7 +122,6 @@ export default function DashboardPage() {
     }
   };
 
-
   const stats = [
     {
       title: "Active Competitions",
@@ -135,7 +148,9 @@ export default function DashboardPage() {
             competitions
               .filter((c) => c.scoreA != null && c.scoreB != null)
               .reduce((sum, c) => sum + (c.scoreA! + c.scoreB!), 0) /
-            (competitions.filter((c) => c.scoreA != null && c.scoreB != null).length * 2 || 1)
+            (competitions.filter((c) => c.scoreA != null && c.scoreB != null)
+              .length *
+              2 || 1)
           ).toFixed(1)
         : "0.0",
       icon: BarChart3,
@@ -180,6 +195,14 @@ export default function DashboardPage() {
     );
   }
 
+  if (status === "unauthenticated") {
+    return (
+      <Suspense fallback={null}>
+        <DashboardRedirect status={status} />
+      </Suspense>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -188,7 +211,7 @@ export default function DashboardPage() {
             Welcome back, {session?.user?.name || "User"}!
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
-            Here's what's happening with your competitions today.
+            Here&apos;s what&apos;s happening with your competitions today.
           </p>
         </div>
 
@@ -228,124 +251,54 @@ export default function DashboardPage() {
             <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
-                  <Trophy className="h-5 w-5 text-blue-600" />
-                  <span>Recent Competitions</span>
+                  <Calendar className="w-5 h-5 text-blue-500" />
+                  <span>Active Competitions</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {competitions.length > 0 ? (
-                    competitions.map((competition) => (
-                      <div
+                {competitions.length === 0 ? (
+                  <p className="text-gray-600 dark:text-gray-400">
+                    No competitions available.
+                  </p>
+                ) : (
+                  <div className="space-y-4">
+                    {competitions.map((competition) => (
+                      <Link
+                        href={`/pages/Scoreboard`}
                         key={competition.id}
-                        className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg hover:shadow-md transition-all duration-200 hover:scale-[1.02]"
+                        className="block p-4 border rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition"
                       >
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-gray-900 dark:text-white">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
                             {competition.name}
                           </h3>
-                          <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600 dark:text-gray-400">
-                            <span className="flex items-center space-x-1">
-                              <Users className="h-4 w-4" />
-                              <span>{competition.participants} participants</span>
-                            </span>
-                            <span className="flex items-center space-x-1">
-                              <Star className="h-4 w-4" />
-                              <span>{competition.judges} judges</span>
-                            </span>
-                            <span className="flex items-center space-x-1">
-                              <Calendar className="h-4 w-4" />
-                              <span>{competition.endDate}</span>
-                            </span>
-                            {competition.scoreA != null && competition.scoreB != null && (
-                              <span className="flex items-center space-x-1">
-                                <BarChart3 className="h-4 w-4" />
-                                <span>
-                                  Score: {competition.scoreA} - {competition.scoreB}
-                                </span>
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-3">
                           <span
-                            className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(
+                            className={`inline-block px-2 py-1 text-xs font-semibold rounded ${getStatusColor(
                               competition.status
                             )}`}
                           >
                             {competition.status}
                           </span>
                         </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-gray-600 text-center">
-                      No competitions found.
-                    </p>
-                  )}
-                </div>
+                        <p className="text-gray-600 dark:text-gray-400 mt-1">
+                          Participants: {competition.participants} | Judges:{" "}
+                          {competition.judges} | Ends: {competition.endDate}
+                        </p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
 
-          {/* Quick Actions & Live Updates */}
-          <div className="space-y-6">
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {session?.user?.role === "admin" && (
-                  <Link href="/competition">
-                    <Button>Create Competition</Button>
-                  </Link>
-                )}
-                {["admin", "judge"].includes(session?.user?.role ?? "") && (
-                  <Link href="/pages/Judge">
-                    <Button variant="outline" className="w-full">
-                      <Star className="h-4 w-4 mr-2" />
-                      Start Judging
-                    </Button>
-                  </Link>
-                )}
-                <Link href="/pages/Scoreboard">
-                  <Button variant="outline" className="w-full">
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    View Scoreboard
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Clock className="h-5 w-5 text-green-600" />
-                  <span>Live Updates</span>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Judge Smith submitted scores for Dance Round 1
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    <span className="text-gray-600 dark:text-gray-400">
-                      New participant registered for Talent Show
-                    </span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></div>
-                    <span className="text-gray-600 dark:text-gray-400">
-                      Competition deadline extended by 2 hours
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
+          {/* Placeholder for extra info or future cards */}
+          <div>
+            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl p-6 flex flex-col items-center justify-center">
+              <Clock className="w-12 h-12 text-gray-500 dark:text-gray-400 mb-4 animate-pulse" />
+              <p className="text-gray-700 dark:text-gray-300">
+                More dashboard features coming soon!
+              </p>
             </Card>
           </div>
         </div>
