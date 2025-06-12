@@ -12,6 +12,7 @@ import { Button } from "@/app/components/ui/button";
 import { Trophy, Users, Star, BarChart3, Calendar, Clock } from "lucide-react";
 import Link from "next/link";
 import DashboardRedirect from "@/app/DashboardRedirect";
+import { useRouter } from 'next/navigation';
 
 // Extend Session type to include role
 declare module "next-auth" {
@@ -61,13 +62,21 @@ export default function DashboardPage() {
   const [totalJudges, setTotalJudges] = useState<number>(0);
   const [submissionsToday] = useState<number>(0);
 
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/pages/login');
+    }
+  }, [status, router]);
+
+  // Load data when authenticated
   useEffect(() => {
     if (status === "authenticated") {
       fetchCompetitions();
       fetchJudgeCount();
     }
   }, [status]);
-
   const fetchCompetitions = async () => {
     try {
       setLoading(true);

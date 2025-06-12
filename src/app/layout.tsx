@@ -1,4 +1,4 @@
-"use client";
+'use client';
 
 import { AppHeader } from "@/app/components/header";
 import SessionProviderWrapper from "@/app/components/SessionProviderWrapper";
@@ -8,7 +8,11 @@ import './styles/globals.css';
 
 export default function Layout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const isAuthPage = pathname === '/pages/login' ; // Add other auth pages if needed
+
+  // Define public (unauthenticated) routes
+  const publicRoutes = ['/pages/login', '/pages/register'];
+
+  const isAuthPage = publicRoutes.includes(pathname);
 
   return (
     <html lang="en">
