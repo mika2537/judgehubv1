@@ -1,6 +1,6 @@
 "use client";
 
-import { useState} from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import {
@@ -69,6 +69,10 @@ export default function LoginPage() {
     }
   };
 
+  const handleRegisterRedirect = () => {
+    router.push("/register"); // Change if your register page route is different
+  };
+
   const getRoleIcon = (role) => {
     switch (role) {
       case "admin":
@@ -99,11 +103,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
       <Card className="w-full max-w-md bg-white/10 backdrop-blur-md border-white/20">
         <CardHeader className="text-center">
-          <CardTitle
-            className="text-2xl font-bold text-whiteქ
-
-System: white flex items-center justify-center gap-2"
-          >
+          <CardTitle className="text-2xl font-bold text-white flex items-center justify-center gap-2">
             <Shield className="h-6 w-6 text-yellow-400" />
             Login to JudgeHub
           </CardTitle>
@@ -220,6 +220,13 @@ System: white flex items-center justify-center gap-2"
             className="w-full bg-yellow-400 text-purple-900 hover:bg-yellow-500 font-semibold"
           >
             Login as {formData.role || "User"}
+          </Button>
+
+          <Button
+            onClick={handleRegisterRedirect}
+            className="w-full bg-yellow-400 text-purple-900 hover:bg-yellow-500 font-semibold"
+          >
+            Register
           </Button>
         </CardContent>
       </Card>

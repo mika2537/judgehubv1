@@ -65,7 +65,7 @@ function DashboardContent() {
 
   useEffect(() => {
     if (status === "unauthenticated") {
-      const redirectTo = searchParams?.get("redirect") || "/dashboard";
+      const redirectTo = searchParams?.get("redirect") || "/pages/dashboard";
       sessionStorage.setItem("loginRedirect", redirectTo);
       router.push("/login");
     } else if (status === "authenticated") {

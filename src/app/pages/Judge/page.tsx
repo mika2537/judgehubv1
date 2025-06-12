@@ -47,7 +47,7 @@ const Judge = () => {
       status === "authenticated" &&
       !["admin", "judge"].includes(session?.user?.role ?? "")
     ) {
-      router.push("/pages/dashboard");
+      router.push("/pages/Dashboard");
     }
   }, [status, session, router]);
 
@@ -292,7 +292,7 @@ const Judge = () => {
             Retry
           </Button>
           <Button
-            onClick={() => router.push("/pages/dashboard")}
+            onClick={() => router.push("/pages/Dashboard")}
             className="mt-4 bg-gray-600 text-white hover:bg-gray-700"
           >
             Back to Dashboard
@@ -308,7 +308,7 @@ const Judge = () => {
             No valid competition, participant, or criteria found.
           </p>
           <Button
-            onClick={() => router.push("/pages/dashboard")}
+            onClick={() => router.push("/pages/Dashboard")}
             className="bg-blue-600 text-white hover:bg-blue-700"
           >
             Back to Dashboard

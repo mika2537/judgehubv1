@@ -2,7 +2,9 @@ import dotenv from "dotenv";
 import { MongoClient, ObjectId } from "mongodb";
 dotenv.config();
 
-const uri = process.env.MONGODB_URI || "mongodb://localhost:27017";
+const uri =
+  process.env.MONGODB_URI ||
+  "mongodb+srv://mika:guhbac-guqce9-Syqjum@voting.e2szuse.mongodb.net/";
 const dbName = process.env.MONGODB_DB || "judgehub";
 const client = new MongoClient(uri);
 

@@ -117,13 +117,6 @@ export default function Scoreboard() {
     fetchScoreboard();
   }, [fetchScoreboard, selectedCompetition]);
 
-  // Live updates
-  useEffect(() => {
-    if (!isLive || !selectedCompetition) return;
-    const interval = setInterval(fetchScoreboard, 5000);
-    return () => clearInterval(interval);
-  }, [isLive, selectedCompetition, fetchScoreboard]);
-
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:

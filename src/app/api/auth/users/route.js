@@ -5,7 +5,18 @@ export async function POST(request) {
   try {
     const client = await clientPromise;
     const db = client.db();
-    const { email, password } = await request.json();
+
+    const { email, password, name, role } = await request.json();
+
+    // Validate all required fields
+    if (!email || !password || !name || !role) {
+      return new Response(
+        JSON.stringify({
+          error: "Please provide email, password, name, and role.",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
     // Check if user exists
     const existingUser = await db.collection("users").findOne({ email });
@@ -18,14 +29,14 @@ export async function POST(request) {
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
-    console.log("Hashed password:", hashedPassword);
 
-    // Insert new user
+    // Insert new user with name and role
     await db.collection("users").insertOne({
       email,
       password: hashedPassword,
+      name,
+      role,
       createdAt: new Date(),
-      userImage: "",
     });
 
     return new Response(JSON.stringify({ success: true }), {

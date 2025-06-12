@@ -93,25 +93,25 @@ export default function CompetitionPage() {
           : new Date().toISOString().split('T')[0],
         status: item.status || 'Upcoming',
         participants: Array.isArray(item.participants)
-  ? item.participants.map((p: { id?: string; name?: string }) => ({
-      id: p.id || crypto.randomUUID(),
-      name: p.name || 'Unnamed Participant',
-    }))
-  : [],
-  judges: Array.isArray(item.judges)
-  ? item.judges.map((j: { id?: string; name?: string; email?: string }) => ({
-      id: j.id || crypto.randomUUID(),
-      name: j.name || 'Unnamed Judge',
-      email: j.email || '',
-    }))
-  : [],
-  criteria: Array.isArray(item.criteria)
-  ? item.criteria.map((c: { id?: string; name?: string; weight?: number }) => ({
-      id: c.id || crypto.randomUUID(),
-      name: c.name || '',
-      weight: Number(c.weight) || 0,
-    }))
-  : [],
+          ? item.participants.map((p: { id?: string; name?: string }) => ({
+              id: p.id || crypto.randomUUID(),
+              name: p.name || 'Unnamed Participant',
+            }))
+          : [],
+        judges: Array.isArray(item.judges)
+          ? item.judges.map((j: { id?: string; name?: string; email?: string }) => ({
+              id: j.id || crypto.randomUUID(),
+              name: j.name || 'Unnamed Judge',
+              email: j.email || '',
+            }))
+          : [],
+        criteria: Array.isArray(item.criteria)
+          ? item.criteria.map((c: { id?: string; name?: string; weight?: number }) => ({
+              id: c.id || crypto.randomUUID(),
+              name: c.name || '',
+              weight: Number(c.weight) || 0,
+            }))
+          : [],
       }));
 
       setCompetitions(formattedData);
@@ -139,7 +139,6 @@ export default function CompetitionPage() {
   }, [status, session, router, toast]);
 
   const handleCreateCompetition = async () => {
-    // Validate inputs
     if (!newCompetition.name.trim()) {
       toast({
         title: 'Invalid Input',
@@ -172,7 +171,6 @@ export default function CompetitionPage() {
       return;
     }
 
-    // Validate dates
     if (!newCompetition.startDate || !newCompetition.endDate) {
       toast({
         title: 'Invalid Dates',
@@ -222,12 +220,21 @@ export default function CompetitionPage() {
       }
 
       const createdCompetition = await res.json();
-
-      setCompetitions([...competitions, {
-        ...createdCompetition,
-        startDate: new Date(createdCompetition.startDate).toISOString().split('T')[0],
-        endDate: new Date(createdCompetition.endDate).toISOString().split('T')[0],
-      }]);
+      function isValidDate(date: any): boolean {
+        return !isNaN(new Date(date).getTime());
+      }
+      setCompetitions([
+        ...competitions,
+        {
+          ...createdCompetition,
+          startDate: isValidDate(createdCompetition.startDate)
+            ? new Date(createdCompetition.startDate).toISOString().split('T')[0]
+            : '',
+          endDate: isValidDate(createdCompetition.endDate)
+            ? new Date(createdCompetition.endDate).toISOString().split('T')[0]
+            : '',
+        }
+      ]);
       setActiveTab('list');
 
       toast({
@@ -235,7 +242,6 @@ export default function CompetitionPage() {
         description: 'Competition created successfully!',
       });
 
-      // Reset form
       setNewCompetition({
         name: '',
         description: '',
@@ -253,6 +259,40 @@ export default function CompetitionPage() {
       toast({
         title: 'Error',
         description: err instanceof Error ? err.message : 'Could not create competition',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleDeleteCompetition = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this competition?')) {
+      return;
+    }
+  
+    try {
+      const res = await fetch(`/api/competitions?id=${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+  
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || `Failed to delete competition (Status: ${res.status})`);
+      }
+  
+      setCompetitions(competitions.filter((comp) => comp._id !== id));
+  
+      toast({
+        title: 'Success',
+        description: 'Competition deleted successfully!',
+      });
+    } catch (err) {
+      console.error('Delete error:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Could not delete competition',
         variant: 'destructive',
       });
     }
@@ -447,11 +487,11 @@ export default function CompetitionPage() {
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {competitions.map((competition) => (
+                {competitions.map((competition, index) => (
                   <Card
-                    key={competition._id}
-                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300"
-                  >
+                  key={competition._id ?? `${competition.name}-${index}`}
+                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300"
+                >
                     <CardHeader>
                       <div className="flex justify-between items-start">
                         <CardTitle className="text-lg">{competition.name}</CardTitle>
@@ -480,13 +520,21 @@ export default function CompetitionPage() {
                             <span>{Array.isArray(competition.judges) ? competition.judges.length : 0} judges</span>
                           </div>
                         </div>
-                        <div className="pt-2">
+                        <div className="pt-2 flex space-x-2">
                           <Button
                             variant="outline"
-                            className="w-full"
+                            className="flex-1"
                             onClick={() => router.push(`/competition/${competition._id}`)}
                           >
                             View Details
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            onClick={() => handleDeleteCompetition(competition._id!)}
+                            title="Delete Competition"
+                          >
+                            <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
                       </div>
