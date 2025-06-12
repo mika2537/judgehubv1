@@ -25,9 +25,9 @@ export const authOptions = {
             role: user.role || "",
             name: user.name || "",
           };
+        } else {
+          throw new Error("Invalid email or password");
         }
-
-        throw new Error("Invalid email or password");
       },
     }),
   ],
