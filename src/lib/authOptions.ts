@@ -1,3 +1,4 @@
+// src/lib/authOptions.ts
 import CredentialsProvider from "next-auth/providers/credentials";
 import { connectToDb } from "@/lib/mongodb";
 import bcrypt from "bcryptjs";
@@ -15,9 +16,7 @@ export const authOptions = {
       async authorize(credentials) {
         const { email, password } = credentials!;
         const { db } = await connectToDb();
-        const usersCollection = db.collection("users");
-
-        const user = await usersCollection.findOne({ email });
+        const user = await db.collection("users").findOne({ email });
 
         if (user && (await bcrypt.compare(password, user.password))) {
           return {
@@ -33,7 +32,7 @@ export const authOptions = {
     }),
   ],
   pages: {
-    signIn: "/login",
+    signIn: "pages/login",
     error: "/auth/error",
   },
   callbacks: {

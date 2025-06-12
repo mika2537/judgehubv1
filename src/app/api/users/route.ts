@@ -45,10 +45,18 @@ export async function POST(request: NextRequest) {
     });
 
     return NextResponse.json({ success: true }, { status: 201 });
-  } catch (error: any) {
-    console.error("User registration error:", error);
+  }  catch (error: unknown) {
+    if (error instanceof Error) {
+      console.error("User registration error:", error);
+      return NextResponse.json(
+        { error: error.message },
+        { status: 500 }
+      );
+    }
+  
+    // Fallback for non-Error objects
     return NextResponse.json(
-      { error: error.message || "Internal Server Error" },
+      { error: "Unknown server error" },
       { status: 500 }
     );
   }

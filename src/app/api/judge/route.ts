@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/pages/login/control/authOptions"; // Adjust the import path as necessary
+import { authOptions } from "@/lib/authOptions"; // Adjust the import path as necessary
 import { connectToDb } from "@/lib/mongodb"; 
 
 interface Participant {

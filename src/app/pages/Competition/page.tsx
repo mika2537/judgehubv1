@@ -220,8 +220,11 @@ export default function CompetitionPage() {
       }
 
       const createdCompetition = await res.json();
-      function isValidDate(date: any): boolean {
-        return !isNaN(new Date(date).getTime());
+      function isValidDate(date: unknown): date is string | number | Date {
+        return (
+          (typeof date === "string" || typeof date === "number" || date instanceof Date) &&
+          !isNaN(new Date(date).getTime())
+        );
       }
       setCompetitions([
         ...competitions,
