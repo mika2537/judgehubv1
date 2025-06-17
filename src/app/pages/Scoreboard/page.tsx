@@ -12,6 +12,8 @@ import {
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Trophy, Medal, Star, TrendingUp, Users, RefreshCw, ArrowLeft } from "lucide-react";
+import { useToast } from "@/app/components/ui/use-toast";
+import { useLanguage } from "@/context/languageContext";
 
 interface Criterion {
   id: string;
@@ -19,25 +21,21 @@ interface Criterion {
   weight: number;
 }
 
-type Participant = {
+interface Participant {
   id: string;
   name: string;
-  criteria: Criterion[];
-};
+  criteria?: Criterion[];
+}
 
-type Competition = {
+interface Competition {
   _id: string;
   name: string;
-  teamA?: string;
-  teamB?: string;
-  scoreA?: number;
-  scoreB?: number;
   status: string;
   participants: Participant[];
   judges: number;
   endDate: string;
   criteria: Criterion[];
-};
+}
 
 interface ScoreboardEntry {
   _id: string;
@@ -47,9 +45,11 @@ interface ScoreboardEntry {
   rank?: number;
 }
 
-export default function Scoreboard() {
+const Scoreboard = () => {
   const { status } = useSession();
   const router = useRouter();
+  const { toast } = useToast();
+  const { t } = useLanguage();
   const [selectedCompetition, setSelectedCompetition] = useState<string | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [leaderboard, setLeaderboard] = useState<ScoreboardEntry[]>([]);
@@ -64,19 +64,29 @@ export default function Scoreboard() {
       setError(null);
       const response = await fetch("/api/events", { credentials: "include" });
       if (!response.ok) {
-        throw new Error(`Failed to fetch competitions: ${response.status}`);
+        throw new Error(t("failedFetchCompetitions", { status: response.status.toString() }));
       }
       const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error(t("invalidResponseFormat"));
+      }
       setCompetitions(data);
       if (data.length > 0) {
         setSelectedCompetition(data[0]._id);
+      } else {
+        setError(t("noCompetitionsAvailable"));
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
+      setError(err instanceof Error ? err.message : t("unknownError"));
+      toast({
+        title: t("errorTitle"),
+        description: err instanceof Error ? err.message : t("unknownError"),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t, toast]);
 
   // Fetch scoreboard
   const fetchScoreboard = useCallback(async () => {
@@ -86,9 +96,12 @@ export default function Scoreboard() {
       setError(null);
       const response = await fetch(`/api/scoreboard/${selectedCompetition}`);
       if (!response.ok) {
-        throw new Error(`Failed to fetch scoreboard: ${response.status}`);
+        throw new Error(t("failedFetchScoreboard", { status: response.status.toString() }));
       }
       const data = await response.json();
+      if (!Array.isArray(data)) {
+        throw new Error(t("invalidResponseFormat"));
+      }
       const sortedData = data
         .sort((a: ScoreboardEntry, b: ScoreboardEntry) => b.totalScore - a.totalScore)
         .map((entry: ScoreboardEntry, index: number) => ({
@@ -97,13 +110,18 @@ export default function Scoreboard() {
         }));
       setLeaderboard(sortedData);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "An unknown error occurred");
+      setError(err instanceof Error ? err.message : t("unknownError"));
+      toast({
+        title: t("errorTitle"),
+        description: err instanceof Error ? err.message : t("unknownError"),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
-  }, [selectedCompetition]);
+  }, [selectedCompetition, t, toast]);
 
-  // Redirect unauthenticated users
+  // Redirect unauthenticated users and fetch competitions
   useEffect(() => {
     if (status === "unauthenticated") {
       router.push("/pages/login");
@@ -114,8 +132,10 @@ export default function Scoreboard() {
 
   // Fetch scoreboard when selectedCompetition changes
   useEffect(() => {
-    fetchScoreboard();
-  }, [fetchScoreboard, selectedCompetition]);
+    if (selectedCompetition) {
+      fetchScoreboard();
+    }
+  }, [selectedCompetition, fetchScoreboard]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -151,9 +171,11 @@ export default function Scoreboard() {
     return <div className="w-4 h-4 bg-gray-300 rounded-full"></div>;
   };
 
-  const selectedComp = competitions.find((comp) => comp._id === selectedCompetition);
+  const selectedComp = competitions.find((comp) => comp._id === selectedCompetition) ?? null;
   const judgedParticipants = leaderboard.length;
-  const totalParticipants = selectedComp?.participants || 0;
+  const totalParticipants = Array.isArray(selectedComp?.participants)
+    ? selectedComp.participants.length
+    : 0;
 
   if (status === "loading" || loading) {
     return (
@@ -163,18 +185,26 @@ export default function Scoreboard() {
     );
   }
 
-  if (error) {
+  if (error || !competitions.length) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <p className="text-red-600 text-lg font-semibold mb-4">{error}</p>
+        <p className="text-red-600 text-lg font-semibold mb-4">
+          {error || t("noCompetitionsAvailable")}
+        </p>
         <Button
           onClick={() => {
             fetchCompetitions();
-            fetchScoreboard();
+            if (selectedCompetition) fetchScoreboard();
           }}
           className="bg-blue-600 text-white hover:bg-blue-700"
         >
-          Retry
+          {t("retry")}
+        </Button>
+        <Button
+          onClick={() => router.push("/pages/Dashboard")}
+          className="mt-4 bg-gray-600 text-white hover:bg-gray-700"
+        >
+          {t("backToDashboard")}
         </Button>
       </div>
     );
@@ -194,14 +224,14 @@ export default function Scoreboard() {
                 className="hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
               >
                 <ArrowLeft className="h-4 w-4 mr-2" />
-                Back
+                {t("back")}
               </Button>
               <div>
                 <h1 className="text-3xl font-semibold text-gray-900 dark:text-white mb-2">
-                  Leaderboard
+                  {t("leaderboard")}
                 </h1>
                 <p className="text-gray-500 dark:text-gray-400">
-                  Real-time competition results
+                  {t("realTimeCompetitionResults")}
                 </p>
               </div>
             </div>
@@ -209,7 +239,9 @@ export default function Scoreboard() {
               {isLive && (
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
-                  <span className="text-sm text-red-600 dark:text-red-400 font-semibold">LIVE</span>
+                  <span className="text-sm text-red-600 dark:text-red-400 font-semibold">
+                    {t("live")}
+                  </span>
                 </div>
               )}
               <Button
@@ -219,7 +251,7 @@ export default function Scoreboard() {
                 className="hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
+                {t("refresh")}
               </Button>
             </div>
           </div>
@@ -229,7 +261,7 @@ export default function Scoreboard() {
         <div className="mb-8">
           <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">Select Event</CardTitle>
+              <CardTitle className="text-lg font-semibold">{t("selectEvent")}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -238,17 +270,24 @@ export default function Scoreboard() {
                     key={comp._id}
                     variant={selectedCompetition === comp._id ? "default" : "outline"}
                     className={`p-4 h-auto text-left justify-start items-start transition-all duration-200 ${
-                      selectedCompetition === comp._id ? getRankColor(1) : "hover:bg-gray-100 dark:hover:bg-gray-700"
+                      selectedCompetition === comp._id
+                        ? getRankColor(1)
+                        : "hover:bg-gray-100 dark:hover:bg-gray-700"
                     }`}
                     onClick={() => setSelectedCompetition(comp._id)}
                   >
                     <div>
-                      <div className="font-semibold text-gray-900 dark:text-white">{comp.name}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        Progress: {judgedParticipants}/{comp.participants.length}
+                      <div className="font-semibold text-gray-900 dark:text-white">
+                        {comp.name}
                       </div>
-                      <Badge variant="outline" className="mt-2 border-gray-300 dark:border-gray-600">
-                        {comp.status}
+                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                        {t("progress")}: {judgedParticipants}/{comp.participants.length}
+                      </div>
+                      <Badge
+                        variant="outline"
+                        className="mt-2 border-gray-300 dark:border-gray-600"
+                      >
+                        {t(comp.status.toLowerCase())}
                       </Badge>
                     </div>
                   </Button>
@@ -259,43 +298,49 @@ export default function Scoreboard() {
         </div>
 
         {/* Competition Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
-            <CardContent className="p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Teams</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {Array.isArray(totalParticipants) ? totalParticipants.length : totalParticipants}
-                </p>
-              </div>
-              <Users className="h-8 w-8 text-blue-600" />
-            </CardContent>
-          </Card>
+        {selectedComp && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t("totalTeams")}
+                  </p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {totalParticipants}
+                  </p>
+                </div>
+                <Users className="h-8 w-8 text-blue-600" />
+              </CardContent>
+            </Card>
 
-          <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
-            <CardContent className="p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Judged</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">{judgedParticipants}</p>
-              </div>
-              <Star className="h-8 w-8 text-yellow-600" />
-            </CardContent>
-          </Card>
+            <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t("judged")}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {judgedParticipants}
+                  </p>
+                </div>
+                <Star className="h-8 w-8 text-yellow-600" />
+              </CardContent>
+            </Card>
 
-          <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
-            <CardContent className="p-6 flex items-center justify-between">
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Progress</p>
-                <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                  {typeof totalParticipants === "number" && totalParticipants > 0
-                    ? Math.round((judgedParticipants / totalParticipants) * 100)
-                    : 0}%
-                </p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="bg-white/90 dark:bg-gray-800/90 shadow-xl">
+              <CardContent className="p-6 flex items-center justify-between">
+                <div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">{t("progress")}</p>
+                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
+                    {totalParticipants > 0
+                      ? Math.round((judgedParticipants / totalParticipants) * 100)
+                      : 0}%
+                  </p>
+                </div>
+                <TrendingUp className="h-8 w-8 text-green-600" />
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Leaderboard */}
         {selectedComp && (
@@ -303,66 +348,80 @@ export default function Scoreboard() {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2 text-lg font-semibold">
                 <Trophy className="h-6 w-6 text-yellow-600" />
-                <span>{selectedComp.name} Rankings</span>
+                <span>{t(`${selectedComp.name.toLowerCase().replace(/\s/g, '')}Rankings`, { defaultValue: `${selectedComp.name} Rankings` })}</span>
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {leaderboard.map((entry, index) => (
-                  <div
-                    key={entry._id}
-                    className={`p-6 rounded-lg border transition-all duration-300 hover:shadow-md ${
-                      entry.rank! <= 3
-                        ? "bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-yellow-200 dark:border-yellow-800"
-                        : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600"
-                    }`}
-                    style={{ animationDelay: `${index * 0.1}s` }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          {getRankIcon(entry.rank!)}
-                          {getChangeIcon()}
-                        </div>
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            Team {selectedComp?.participants.find((p) => p.id === entry.participantId)?.name || "Unknown"}
-                          </h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">Performance</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-xl font-bold text-gray-900 dark:text-white">
-                          {entry.totalScore.toFixed(1)}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">Total Score</div>
-                      </div>
-                    </div>
-                    <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {selectedComp.criteria.map((criterion) => {
-                        const scoreEntry = entry.scores.find((s) => s.criterionId === criterion.id);
-                        return (
-                          <div key={criterion.id} className="text-center">
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {criterion.name}
-                            </div>
-                            <div className="text-lg font-semibold text-gray-900 dark:text-white">
-                              {scoreEntry ? scoreEntry.score.toFixed(1) : "N/A"}
-                            </div>
-                            <div className="text-xs text-gray-400">({criterion.weight}%)</div>
+                {leaderboard.length === 0 ? (
+                  <p className="text-gray-500 dark:text-gray-400 text-center">
+                    {t("noScoresAvailable")}
+                  </p>
+                ) : (
+                  leaderboard.map((entry, index) => (
+                    <div
+                      key={entry._id}
+                      className={`p-6 rounded-lg border transition-all duration-300 hover:shadow-md ${
+                        entry.rank! <= 3
+                          ? "bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-yellow-200 dark:border-yellow-800"
+                          : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600"
+                      }`}
+                      style={{ animationDelay: `${index * 0.1}s` }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            {getRankIcon(entry.rank!)}
+                            {getChangeIcon()}
                           </div>
-                        );
-                      })}
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                              {t("team")} {selectedComp.participants.find((p) => p.id === entry.participantId)?.name || t("unknown")}
+                            </h3>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">
+                              {t("performance")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-xl font-bold text-gray-900 dark:text-white">
+                            {entry.totalScore.toFixed(1)}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {t("totalScore")}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {selectedComp.criteria.map((criterion) => {
+                          const scoreEntry = entry.scores.find(
+                            (s) => s.criterionId === criterion.id
+                          );
+                          return (
+                            <div key={criterion.id} className="text-center">
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {criterion.name}
+                              </div>
+                              <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                                {scoreEntry ? scoreEntry.score.toFixed(1) : "N/A"}
+                              </div>
+                              <div className="text-xs text-gray-400">
+                                ({criterion.weight}%)
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
-              {typeof totalParticipants === "number" && judgedParticipants < totalParticipants && (
+              {totalParticipants > judgedParticipants && (
                 <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
                   <div className="flex items-center space-x-2">
                     <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
                     <span className="text-sm text-blue-700 dark:text-blue-300">
-                      Waiting for {totalParticipants - judgedParticipants} more teams to be judged...
+                      {t("waitingForMoreTeams", { count: (totalParticipants - judgedParticipants).toString() })}
                     </span>
                   </div>
                 </div>
@@ -373,4 +432,6 @@ export default function Scoreboard() {
       </div>
     </div>
   );
-}
+};
+
+export default Scoreboard;

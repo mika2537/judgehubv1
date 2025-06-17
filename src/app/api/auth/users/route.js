@@ -6,19 +6,19 @@ export async function POST(request) {
     const client = await clientPromise;
     const db = client.db();
 
-    const { email, password, name, role } = await request.json();
+    const { email, password, name } = await request.json();
 
-    // Validate all required fields
-    if (!email || !password || !name || !role) {
+    // Validate required fields
+    if (!email || !password || !name) {
       return new Response(
         JSON.stringify({
-          error: "Please provide email, password, name, and role.",
+          error: "Please provide email, password, and name.",
         }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // Check if user exists
+    // Check if user already exists
     const existingUser = await db.collection("users").findOne({ email });
     if (existingUser) {
       return new Response(JSON.stringify({ error: "User already exists" }), {
@@ -30,7 +30,10 @@ export async function POST(request) {
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Insert new user with name and role
+    // Assign default role
+    const role = "viewer";
+
+    // Insert new user
     await db.collection("users").insertOne({
       email,
       password: hashedPassword,

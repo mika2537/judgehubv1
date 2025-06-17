@@ -24,7 +24,7 @@ function AuthErrorContent() {
         </h1>
         <p className="text-gray-700">{getErrorMessage(error)}</p>
         <a
-          href="/login"
+          href="pages/login"
           className="mt-4 inline-block text-blue-600 hover:text-blue-800"
         >
           Try again

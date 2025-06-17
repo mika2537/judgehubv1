@@ -1,4 +1,9 @@
 @import "tailwindcss";
+/* app/styles/globals.css */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP&family=Noto+Sans+Mongolian&display=swap');
+body {
+  font-family: 'Noto Sans JP', 'Noto Sans Mongolian', sans-serif;
+}
 
 :root {
   --background: #ffffff;

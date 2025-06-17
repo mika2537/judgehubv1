@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { signIn } from "next-auth/react";
+import { signIn, getCsrfToken } from "next-auth/react";
 import {
   Card,
   CardContent,
@@ -13,41 +13,53 @@ import {
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/app/components/ui/select";
-import { Badge } from "@/app/components/ui/badge";
-import { Shield, Eye, Gavel, Crown } from "lucide-react";
-
-/**
- * @typedef {'admin' | 'judge' | 'viewer'} UserRole
- */
+import { Shield } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [csrfToken, setCsrfToken] = useState("");
   const [formData, setFormData] = useState({
     email: "",
     password: "",
-    name: "",
-    role: "",
   });
   const [error, setError] = useState("");
+  const [language, setLanguage] = useState("en");
+
+  const t = {
+    en: {
+      loginTitle: "Login to JudgeHub",
+      loginDesc: "Enter your credentials to continue",
+      email: "Email",
+      password: "Password",
+      login: "Login",
+      register: "Register",
+      error: "Please fill in all fields",
+    },
+    mn: {
+      loginTitle: "Жүжигчний системд нэвтрэх",
+      loginDesc: "Нэвтрэх мэдээллээ оруулна уу",
+      email: "И-мэйл",
+      password: "Нууц үг",
+      login: "Нэвтрэх",
+      register: "Бүртгүүлэх",
+      error: "Бүх талбарыг бөглөнө үү",
+    },
+  };
+
+  useEffect(() => {
+    const loadToken = async () => {
+      const token = await getCsrfToken();
+      if (token) setCsrfToken(token);
+    };
+    loadToken();
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    if (
-      !formData.email ||
-      !formData.password ||
-      !formData.name ||
-      !formData.role
-    ) {
-      setError("Please fill in all fields");
+    if (!formData.email || !formData.password) {
+      setError(t[language].error);
       return;
     }
 
@@ -55,60 +67,40 @@ export default function LoginPage() {
       redirect: false,
       email: formData.email,
       password: formData.password,
-      name: formData.name,
-      role: formData.role,
+      csrfToken, // ✅ include token
     });
 
     if (result?.error) {
-      setError(result.error);
+      setError("Invalid email or password");
     } else {
-      alert(`Welcome ${formData.name}! You are logged in as ${formData.role}`);
-      const redirectPath = sessionStorage.getItem("loginRedirect") || "/";
-      sessionStorage.removeItem("loginRedirect");
-      router.push(redirectPath);
+      router.push("/");
     }
   };
 
   const handleRegisterRedirect = () => {
-    router.push("/register"); // Change if your register page route is different
-  };
-
-  const getRoleIcon = (role) => {
-    switch (role) {
-      case "admin":
-        return <Crown className="h-5 w-5" />;
-      case "judge":
-        return <Gavel className="h-5 w-5" />;
-      case "viewer":
-        return <Eye className="h-5 w-5" />;
-      default:
-        return <Shield className="h-5 w-5" />;
-    }
-  };
-
-  const getRoleDescription = (role) => {
-    switch (role) {
-      case "admin":
-        return "Create and manage events, participants, and system settings";
-      case "judge":
-        return "Score participants and view competition results";
-      case "viewer":
-        return "View events, results, and participant information";
-      default:
-        return "";
-    }
+    router.push("register");
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center p-6">
+      <div className="absolute top-4 right-4">
+        <Button
+          variant="outline"
+          className="text-white border-white"
+          onClick={() => setLanguage(language === "en" ? "mn" : "en")}
+        >
+          {language === "en" ? "MN" : "EN"}
+        </Button>
+      </div>
+
       <Card className="w-full max-w-md bg-white/10 backdrop-blur-md border-white/20">
         <CardHeader className="text-center">
           <CardTitle className="text-2xl font-bold text-white flex items-center justify-center gap-2">
             <Shield className="h-6 w-6 text-yellow-400" />
-            Login to JudgeHub
+            {t[language].loginTitle}
           </CardTitle>
           <CardDescription className="text-gray-300">
-            Enter your credentials and select your role to continue
+            {t[language].loginDesc}
           </CardDescription>
         </CardHeader>
 
@@ -119,115 +111,56 @@ export default function LoginPage() {
             </div>
           )}
 
-          <div className="space-y-2">
-            <Label htmlFor="email" className="text-white">
-              Email
-            </Label>
-            <Input
-              id="email"
-              type="email"
-              value={formData.email}
-              onChange={(e) =>
-                setFormData({ ...formData, email: e.target.value })
-              }
-              className="bg-white/10 border-white/30 text-white placeholder:text-gray-400"
-              placeholder="Enter your email"
-            />
-          </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <input type="hidden" name="csrfToken" value={csrfToken} />
 
-          <div className="space-y-2">
-            <Label htmlFor="password" className="text-white">
-              Password
-            </Label>
-            <Input
-              id="password"
-              type="password"
-              value={formData.password}
-              onChange={(e) =>
-                setFormData({ ...formData, password: e.target.value })
-              }
-              className="bg-white/10 border-white/30 text-white placeholder:text-gray-400"
-              placeholder="Enter your password"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="email" className="text-white">
+                {t[language].email}
+              </Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) =>
+                  setFormData({ ...formData, email: e.target.value })
+                }
+                className="bg-white/10 border-white/30 text-white placeholder:text-gray-400"
+                placeholder="you@example.com"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="name" className="text-white">
-              Your Name
-            </Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) =>
-                setFormData({ ...formData, name: e.target.value })
-              }
-              className="bg-white/10 border-white/30 text-white placeholder:text-gray-400"
-              placeholder="Enter your full name"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="text-white">
+                {t[language].password}
+              </Label>
+              <Input
+                id="password"
+                type="password"
+                value={formData.password}
+                onChange={(e) =>
+                  setFormData({ ...formData, password: e.target.value })
+                }
+                className="bg-white/10 border-white/30 text-white placeholder:text-gray-400"
+                placeholder="********"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label className="text-white">Select Your Role</Label>
-            <Select
-              onValueChange={(value) =>
-                setFormData({ ...formData, role: value })
-              }
+            <Button
+              type="submit"
+              className="w-full bg-yellow-400 text-purple-900 hover:bg-yellow-500 font-semibold"
             >
-              <SelectTrigger className="bg-white/10 border-white/30 text-white">
-                <SelectValue placeholder="Choose your role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">
-                  <div className="flex items-center gap-2">
-                    <Crown className="h-4 w-4" />
-                    <span>Admin</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="judge">
-                  <div className="flex items-center gap-2">
-                    <Gavel className="h-4 w-4" />
-                    <span>Judge</span>
-                  </div>
-                </SelectItem>
-                <SelectItem value="viewer">
-                  <div className="flex items-center gap-2">
-                    <Eye className="h-4 w-4" />
-                    <span>Viewer</span>
-                  </div>
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+              {t[language].login}
+            </Button>
 
-          {formData.role && (
-            <Card className="bg-white/5 border-white/20">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  {getRoleIcon(formData.role)}
-                  <Badge variant="secondary" className="bg-white/20 text-white">
-                    {formData.role.toUpperCase()}
-                  </Badge>
-                </div>
-                <p className="text-sm text-gray-300">
-                  {getRoleDescription(formData.role)}
-                </p>
-              </CardContent>
-            </Card>
-          )}
-
-          <Button
-            onClick={handleSubmit}
-            className="w-full bg-yellow-400 text-purple-900 hover:bg-yellow-500 font-semibold"
-          >
-            Login as {formData.role || "User"}
-          </Button>
-
-          <Button
-            onClick={handleRegisterRedirect}
-            className="w-full bg-yellow-400 text-purple-900 hover:bg-yellow-500 font-semibold"
-          >
-            Register
-          </Button>
+            <Button
+              type="button"
+              onClick={handleRegisterRedirect}
+              className="w-full text-white hover:underline mt-2"
+            >
+              {t[language].register}
+            </Button>
+          </form>
         </CardContent>
       </Card>
     </div>

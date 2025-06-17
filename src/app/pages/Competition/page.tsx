@@ -1,15 +1,33 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useSession } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/app/components/ui/card';
-import { Button } from '@/app/components/ui/button';
-import { Input } from '@/app/components/ui/input';
-import { Badge } from '@/app/components/ui/badge';
-import { PlusCircle, Trash2, ArrowLeft, Calendar, List, Percent, Award, User, Clock, CheckCircle } from 'lucide-react';
-import { useToast } from '@/app/components/ui/use-toast';
-import { Textarea } from '@/app/components/ui/textarea';
+import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
+import { Input } from "@/app/components/ui/input";
+import { Badge } from "@/app/components/ui/badge";
+import {
+  PlusCircle,
+  Trash2,
+  ArrowLeft,
+  Calendar,
+  List,
+  Percent,
+  Award,
+  User,
+  Clock,
+  CheckCircle,
+} from "lucide-react";
+import { useToast } from "@/app/components/ui/use-toast";
+import { Textarea } from "@/app/components/ui/textarea";
+import { useLanguage } from "@/context/languageContext";
 
 interface Participant {
   id: string;
@@ -34,148 +52,166 @@ interface Competition {
   description: string;
   startDate: string;
   endDate: string;
-  status: 'Upcoming' | 'Ongoing' | 'Completed';
+  status: "Upcoming" | "Ongoing" | "Completed";
   participants: Participant[];
   judges: Judge[];
   criteria: Criterion[];
 }
 
-export default function CompetitionPage() {
+const CompetitionPage = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'list' | 'create'>('list');
+  const [activeTab, setActiveTab] = useState<"list" | "create">("list");
 
-  const [newCompetition, setNewCompetition] = useState<Omit<Competition, '_id'>>({
-    name: '',
-    description: '',
-    startDate: new Date().toISOString().split('T')[0],
-    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-    status: 'Upcoming',
+  const [newCompetition, setNewCompetition] = useState<Omit<Competition, "_id">>({
+    name: "",
+    description: "",
+    startDate: new Date().toISOString().split("T")[0],
+    endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+    status: "Upcoming",
     participants: [],
     judges: [],
-    criteria: [{ id: crypto.randomUUID(), name: '', weight: 0 }],
+    criteria: [{ id: crypto.randomUUID(), name: "", weight: 0 }],
   });
 
-  const [newParticipant, setNewParticipant] = useState({ name: '' });
-  const [newJudge, setNewJudge] = useState({ name: '', email: '' });
+  const [newParticipant, setNewParticipant] = useState({ name: "" });
+  const [newJudge, setNewJudge] = useState({ name: "", email: "" });
 
   const fetchCompetitions = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await fetch('/api/competitions');
+      const res = await fetch("/api/competitions", { credentials: "include" });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Failed to fetch competitions: ${res.status}`);
+        throw new Error(
+          errorData.message ||
+            t("failedFetchCompetitions", { status: res.status.toString() })
+        );
       }
 
       const data = await res.json();
-      console.log('Raw competition data:', data);
+      console.log("Raw competition data:", data);
 
       if (!Array.isArray(data)) {
-        throw new Error('Invalid response format: Expected an array');
+        throw new Error(t("invalidResponseFormat"));
       }
 
       const formattedData: Competition[] = data.map((item: Partial<Competition>) => ({
         _id: item._id?.toString(),
-        name: item.name || 'Unnamed Competition',
-        description: item.description || '',
+        name: item.name || t("unnamedCompetition"),
+        description: item.description || "",
         startDate: item.startDate
-          ? new Date(item.startDate).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0],
+          ? new Date(item.startDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
         endDate: item.endDate
-          ? new Date(item.endDate).toISOString().split('T')[0]
-          : new Date().toISOString().split('T')[0],
-        status: item.status || 'Upcoming',
+          ? new Date(item.endDate).toISOString().split("T")[0]
+          : new Date().toISOString().split("T")[0],
+        status: item.status || "Upcoming",
         participants: Array.isArray(item.participants)
           ? item.participants.map((p: { id?: string; name?: string }) => ({
               id: p.id || crypto.randomUUID(),
-              name: p.name || 'Unnamed Participant',
+              name: p.name || t("unnamedParticipant"),
             }))
           : [],
         judges: Array.isArray(item.judges)
-          ? item.judges.map((j: { id?: string; name?: string; email?: string }) => ({
-              id: j.id || crypto.randomUUID(),
-              name: j.name || 'Unnamed Judge',
-              email: j.email || '',
-            }))
+          ? item.judges.map(
+              (j: { id?: string; name?: string; email?: string }) => ({
+                id: j.id || crypto.randomUUID(),
+                name: j.name || t("unnamedJudge"),
+                email: j.email || "",
+              })
+            )
           : [],
         criteria: Array.isArray(item.criteria)
-          ? item.criteria.map((c: { id?: string; name?: string; weight?: number }) => ({
-              id: c.id || crypto.randomUUID(),
-              name: c.name || '',
-              weight: Number(c.weight) || 0,
-            }))
+          ? item.criteria.map(
+              (c: { id?: string; name?: string; weight?: number }) => ({
+                id: c.id || crypto.randomUUID(),
+                name: c.name || "",
+                weight: Number(c.weight) || 0,
+              })
+            )
           : [],
       }));
 
       setCompetitions(formattedData);
     } catch (err) {
-      console.error('Fetch error:', err);
-      setError(err instanceof Error ? err.message : 'An unknown error occurred');
+      console.error("Fetch error:", err);
+      setError(err instanceof Error ? err.message : t("unknownError"));
+      toast({
+        title: t("error"),
+        description: err instanceof Error ? err.message : t("unknownError"),
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (status === 'unauthenticated') {
-      router.push('/login?redirect=/competition');
-    } else if (status === 'authenticated' && session?.user?.role !== 'admin') {
+    if (status === "unauthenticated") {
+      router.push("/login?redirect=/competition");
+    } else if (
+      status === "authenticated" &&
+      session?.user?.role !== "admin"
+    ) {
       toast({
-        title: 'Access Denied',
-        description: 'Only admins can access this page.',
-        variant: 'destructive',
+        title: t("accessDenied"),
+        description: t("onlyAdmins"),
+        variant: "destructive",
       });
-      router.push('/dashboard');
-    } else if (status === 'authenticated') {
+      router.push("/dashboard");
+    } else if (status === "authenticated") {
       fetchCompetitions();
     }
-  }, [status, session, router, toast]);
+  }, [status, session, router, toast, t]);
 
   const handleCreateCompetition = async () => {
     if (!newCompetition.name.trim()) {
       toast({
-        title: 'Invalid Input',
-        description: 'Competition name is required.',
-        variant: 'destructive',
+        title: t("invalidInput"),
+        description: t("competitionNameRequired"),
+        variant: "destructive",
       });
       return;
     }
 
     const hasEmptyCriteria = newCompetition.criteria.some(
-      criterion => !criterion.name.trim() || Number(criterion.weight) <= 0
+      (criterion) => !criterion.name.trim() || Number(criterion.weight) <= 0
     );
-
     if (hasEmptyCriteria) {
       toast({
-        title: 'Invalid Criteria',
-        description: 'Each criterion must have a name and a weight greater than 0.',
-        variant: 'destructive',
+        title: t("invalidCriteria"),
+        description: t("criteriaNameWeightRequired"),
+        variant: "destructive",
       });
       return;
     }
 
-    const totalWeight = newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0);
+    const totalWeight = newCompetition.criteria.reduce(
+      (sum, c) => sum + Number(c.weight),
+      0
+    );
     if (totalWeight !== 100) {
       toast({
-        title: 'Invalid Criteria',
-        description: 'Total weight of criteria must be 100%.',
-        variant: 'destructive',
+        title: t("invalidCriteria"),
+        description: t("totalWeightMustBe100"),
+        variant: "destructive",
       });
       return;
     }
 
     if (!newCompetition.startDate || !newCompetition.endDate) {
       toast({
-        title: 'Invalid Dates',
-        description: 'Start date and end date are required.',
-        variant: 'destructive',
+        title: t("invalidDates"),
+        description: t("validDatesRequired"),
+        variant: "destructive",
       });
       return;
     }
@@ -185,27 +221,27 @@ export default function CompetitionPage() {
 
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       toast({
-        title: 'Invalid Dates',
-        description: 'Please provide valid start and end dates.',
-        variant: 'destructive',
+        title: t("invalidDates"),
+        description: t("validDatesRequired"),
+        variant: "destructive",
       });
       return;
     }
 
     if (startDate > endDate) {
       toast({
-        title: 'Invalid Dates',
-        description: 'Start date must be before end date.',
-        variant: 'destructive',
+        title: t("invalidDates"),
+        description: t("startDateBeforeEndDate"),
+        variant: "destructive",
       });
       return;
     }
 
     try {
-      const res = await fetch('/api/competitions', {
-        method: 'POST',
+      const res = await fetch("/api/competitions", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           ...newCompetition,
@@ -216,200 +252,242 @@ export default function CompetitionPage() {
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || 'Failed to create competition');
+        throw new Error(
+          errorData.message || t("couldNotCreateCompetition")
+        );
       }
 
       const createdCompetition = await res.json();
-      function isValidDate(date: unknown): date is string | number | Date {
-        return (
-          (typeof date === "string" || typeof date === "number" || date instanceof Date) &&
-          !isNaN(new Date(date).getTime())
-        );
-      }
+      const isValidDate = (date: unknown): date is string | number | Date =>
+        (typeof date === "string" ||
+          typeof date === "number" ||
+          date instanceof Date) &&
+        !isNaN(new Date(date).getTime());
+
       setCompetitions([
         ...competitions,
         {
           ...createdCompetition,
           startDate: isValidDate(createdCompetition.startDate)
-            ? new Date(createdCompetition.startDate).toISOString().split('T')[0]
-            : '',
+            ? new Date(createdCompetition.startDate).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
           endDate: isValidDate(createdCompetition.endDate)
-            ? new Date(createdCompetition.endDate).toISOString().split('T')[0]
-            : '',
-        }
+            ? new Date(createdCompetition.endDate).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0],
+        },
       ]);
-      setActiveTab('list');
+      setActiveTab("list");
 
       toast({
-        title: 'Success',
-        description: 'Competition created successfully!',
+        title: t("success"),
+        description: t("competitionCreated"),
       });
 
       setNewCompetition({
-        name: '',
-        description: '',
-        startDate: new Date().toISOString().split('T')[0],
-        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        status: 'Upcoming',
+        name: "",
+        description: "",
+        startDate: new Date().toISOString().split("T")[0],
+        endDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .split("T")[0],
+        status: "Upcoming",
         participants: [],
         judges: [],
-        criteria: [{ id: crypto.randomUUID(), name: '', weight: 0 }],
+        criteria: [{ id: crypto.randomUUID(), name: "", weight: 0 }],
       });
-      setNewParticipant({ name: '' });
-      setNewJudge({ name: '', email: '' });
+      setNewParticipant({ name: "" });
+      setNewJudge({ name: "", email: "" });
     } catch (err) {
-      console.error('Create error:', err);
+      console.error("Create error:", err);
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Could not create competition',
-        variant: 'destructive',
+        title: t("error"),
+        description: err instanceof Error ? err.message : t("couldNotCreateCompetition"),
+        variant: "destructive",
       });
     }
   };
 
   const handleDeleteCompetition = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this competition?')) {
+    if (!confirm(t("confirmDelete"))) {
       return;
     }
-  
+
     try {
       const res = await fetch(`/api/competitions?id=${id}`, {
-        method: 'DELETE',
+        method: "DELETE",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
       });
-  
+
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `Failed to delete competition (Status: ${res.status})`);
+        throw new Error(
+          errorData.error || t("couldNotDeleteCompetition")
+        );
       }
-  
+
       setCompetitions(competitions.filter((comp) => comp._id !== id));
-  
+
       toast({
-        title: 'Success',
-        description: 'Competition deleted successfully!',
+        title: t("success"),
+        description: t("competitionDeleted"),
       });
     } catch (err) {
-      console.error('Delete error:', err);
+      console.error("Delete error:", err);
       toast({
-        title: 'Error',
-        description: err instanceof Error ? err.message : 'Could not delete competition',
-        variant: 'destructive',
+        title: t("error"),
+        description: err instanceof Error ? err.message : t("couldNotDeleteCompetition"),
+        variant: "destructive",
       });
     }
   };
 
-  const handleCriteriaChange = (id: string, field: keyof Criterion, value: string | number) => {
-    setNewCompetition(prev => ({
+  const handleCriteriaChange = (
+    id: string,
+    field: keyof Criterion,
+    value: string | number
+  ) => {
+    setNewCompetition((prev) => ({
       ...prev,
-      criteria: prev.criteria.map(criterion =>
-        criterion.id === id ? { ...criterion, [field]: field === 'weight' ? Number(value) : String(value) } : criterion
+      criteria: prev.criteria.map((criterion) =>
+        criterion.id === id
+          ? {
+              ...criterion,
+              [field]: field === "weight" ? Number(value) : String(value),
+            }
+          : criterion
       ),
     }));
   };
 
   const addCriteriaField = () => {
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
-      criteria: [...prev.criteria, { id: crypto.randomUUID(), name: '', weight: 0 }],
+      criteria: [
+        ...prev.criteria,
+        { id: crypto.randomUUID(), name: "", weight: 0 },
+      ],
     }));
   };
 
   const removeCriteriaField = (id: string) => {
     if (newCompetition.criteria.length <= 1) {
       toast({
-        title: 'Cannot Remove',
-        description: 'At least one criterion is required.',
-        variant: 'destructive',
+        title: t("cannotRemove"),
+        description: t("atLeastOneCriterion"),
+        variant: "destructive",
       });
       return;
     }
 
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
-      criteria: prev.criteria.filter(criterion => criterion.id !== id),
+      criteria: prev.criteria.filter((criterion) => criterion.id !== id),
     }));
   };
 
   const addParticipant = () => {
     if (!newParticipant.name.trim()) {
       toast({
-        title: 'Invalid Input',
-        description: 'Participant name is required.',
-        variant: 'destructive',
+        title: t("invalidInput"),
+        description: t("participantNameRequired"),
+        variant: "destructive",
       });
       return;
     }
 
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
       participants: [
         ...prev.participants,
         { id: crypto.randomUUID(), name: newParticipant.name },
       ],
     }));
-    setNewParticipant({ name: '' });
+    setNewParticipant({ name: "" });
   };
 
   const removeParticipant = (id: string) => {
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
-      participants: prev.participants.filter(p => p.id !== id),
+      participants: prev.participants.filter((p) => p.id !== id),
     }));
   };
 
   const addJudge = () => {
     if (!newJudge.name.trim() || !newJudge.email.trim()) {
       toast({
-        title: 'Invalid Input',
-        description: 'Judge name and email are required.',
-        variant: 'destructive',
+        title: t("invalidInput"),
+        description: t("judgeNameEmailRequired"),
+        variant: "destructive",
       });
       return;
     }
 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newJudge.email)) {
       toast({
-        title: 'Invalid Input',
-        description: 'Please enter a valid email address.',
-        variant: 'destructive',
+        title: t("invalidInput"),
+        description: t("invalidEmail"),
+        variant: "destructive",
       });
       return;
     }
 
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
       judges: [
         ...prev.judges,
         { id: crypto.randomUUID(), name: newJudge.name, email: newJudge.email },
       ],
     }));
-    setNewJudge({ name: '', email: '' });
+    setNewJudge({ name: "", email: "" });
   };
 
   const removeJudge = (id: string) => {
-    setNewCompetition(prev => ({
+    setNewCompetition((prev) => ({
       ...prev,
-      judges: prev.judges.filter(j => j.id !== id),
+      judges: prev.judges.filter((j) => j.id !== id),
     }));
   };
 
-  const getStatusBadge = (status: Competition['status']) => {
+  const getStatusBadge = (status: Competition["status"]) => {
     switch (status) {
-      case 'Upcoming':
-        return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800"><Clock className="h-3 w-3 mr-1" /> Upcoming</Badge>;
-      case 'Ongoing':
-        return <Badge variant="secondary" className="bg-green-100 text-green-800"><Award className="h-3 w-3 mr-1" /> Ongoing</Badge>;
-      case 'Completed':
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800"><CheckCircle className="h-3 w-3 mr-1" /> Completed</Badge>;
+      case "Upcoming":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
+          >
+            <Clock className="h-3 w-3 mr-1" />
+            {t("upcoming")}
+          </Badge>
+        );
+      case "Ongoing":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+          >
+            <Award className="h-3 w-3 mr-1" />
+            {t("live")}
+          </Badge>
+        );
+      case "Completed":
+        return (
+          <Badge
+            variant="secondary"
+            className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+          >
+            <CheckCircle className="h-3 w-3 mr-1" />
+            {t("completed")}
+          </Badge>
+        );
       default:
         return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
-  if (status === 'loading' || loading) {
+  if (status === "loading" || loading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-600"></div>
@@ -426,13 +504,13 @@ export default function CompetitionPage() {
             onClick={fetchCompetitions}
             className="bg-blue-600 hover:bg-blue-700"
           >
-            Retry
+            {t("retry")}
           </Button>
           <Button
-            onClick={() => router.push('/dashboard')}
+            onClick={() => router.push("/dashboard")}
             variant="outline"
           >
-            Back to Dashboard
+            {t("backToDashboard")}
           </Button>
         </div>
       </div>
@@ -444,31 +522,37 @@ export default function CompetitionPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Competition Management</h1>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {t("competitionManagement")}
+            </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
-              {activeTab === 'list' ? 'Manage existing competitions' : 'Create a new competition'}
+              {activeTab === "list"
+                ? t("manageExistingCompetitions")
+                : t("createNewCompetition")}
             </p>
           </div>
 
-          {activeTab === 'create' && (
+          {activeTab === "create" && (
             <Button
               variant="outline"
-              onClick={() => setActiveTab('list')}
+              onClick={() => setActiveTab("list")}
               className="hover:bg-gray-200 dark:hover:bg-gray-700"
             >
               <ArrowLeft className="h-4 w-4 mr-2" />
-              Back to List
+              {t("backToList")}
             </Button>
           )}
         </div>
 
-        {activeTab === 'list' ? (
+        {activeTab === "list" ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">All Competitions</h2>
-              <Button onClick={() => setActiveTab('create')}>
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                {t("allCompetitions")}
+              </h2>
+              <Button onClick={() => setActiveTab("create")}>
                 <PlusCircle className="h-4 w-4 mr-2" />
-                Create Competition
+                {t("createCompetition")}
               </Button>
             </div>
 
@@ -477,13 +561,18 @@ export default function CompetitionPage() {
                 <CardContent className="p-8 text-center">
                   <div className="mx-auto flex flex-col items-center justify-center">
                     <List className="h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">No competitions yet</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {t("noCompetitionsYet")}
+                    </h3>
                     <p className="text-gray-500 dark:text-gray-400 mt-2">
-                      Get started by creating a new competition.
+                      {t("getStartedCreateCompetition")}
                     </p>
-                    <Button className="mt-6" onClick={() => setActiveTab('create')}>
+                    <Button
+                      className="mt-6"
+                      onClick={() => setActiveTab("create")}
+                    >
                       <PlusCircle className="h-4 w-4 mr-2" />
-                      Create Competition
+                      {t("createCompetition")}
                     </Button>
                   </div>
                 </CardContent>
@@ -492,16 +581,28 @@ export default function CompetitionPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {competitions.map((competition, index) => (
                   <Card
-                  key={competition._id ?? `${competition.name}-${index}`}
-                  className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300"
-                >
+                    key={competition._id ?? `${competition.name}-${index}`}
+                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300"
+                  >
                     <CardHeader>
                       <div className="flex justify-between items-start">
-                        <CardTitle className="text-lg">{competition.name}</CardTitle>
+                        <CardTitle className="text-lg">
+                          {t(
+                            competition.name
+                              .toLowerCase()
+                              .replace(/\s/g, ""),
+                            { defaultValue: competition.name }
+                          )}
+                        </CardTitle>
                         {getStatusBadge(competition.status)}
                       </div>
                       <CardDescription className="line-clamp-2">
-                        {competition.description || 'No description provided'}
+                        {t(
+                          competition.description
+                            .toLowerCase()
+                            .replace(/\s/g, ""),
+                          { defaultValue: competition.description || t("noDescription") }
+                        )}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -509,33 +610,48 @@ export default function CompetitionPage() {
                         <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
                           <Calendar className="h-4 w-4 mr-2" />
                           <span>
-                            {new Date(competition.startDate).toLocaleDateString()} -{' '}
+                            {new Date(competition.startDate).toLocaleDateString()} -{" "}
                             {new Date(competition.endDate).toLocaleDateString()}
                           </span>
                         </div>
                         <div className="flex space-x-4 text-sm">
                           <div className="flex items-center">
                             <User className="h-4 w-4 mr-2" />
-                            <span>{Array.isArray(competition.participants) ? competition.participants.length : 0} participants</span>
+                            <span>
+                              {Array.isArray(competition.participants)
+                                ? competition.participants.length
+                                : 0}{" "}
+                              {t("participants")}
+                            </span>
                           </div>
                           <div className="flex items-center">
                             <Award className="h-4 w-4 mr-2" />
-                            <span>{Array.isArray(competition.judges) ? competition.judges.length : 0} judges</span>
+                            <span>
+                              {Array.isArray(competition.judges)
+                                ? competition.judges.length
+                                : 0}{" "}
+                              {t("judges")}
+                            </span>
                           </div>
                         </div>
                         <div className="pt-2 flex space-x-2">
                           <Button
                             variant="outline"
                             className="flex-1"
-                            onClick={() => router.push(`/competition/${competition._id}`)}
+                            onClick={() =>
+                              router.push(`/competition/${competition._id}`)
+                            }
                           >
-                            View Details
+                            {t("viewDetails")}
                           </Button>
                           <Button
                             variant="destructive"
                             size="icon"
-                            onClick={() => handleDeleteCompetition(competition._id!)}
-                            title="Delete Competition"
+                            onClick={() =>
+                              handleDeleteCompetition(competition._id!)
+                            }
+                            title={t("deleteCompetition")}
+                            disabled={!competition._id}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -549,48 +665,65 @@ export default function CompetitionPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">Create New Competition</h2>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              {t("createNewCompetition")}
+            </h2>
 
             <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg">
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Competition Name
+                      {t("competitionName")}
                     </label>
                     <Input
-                      placeholder="Enter competition name"
+                      placeholder={t("enterCompetitionName")}
                       value={newCompetition.name}
-                      onChange={(e) => setNewCompetition({ ...newCompetition, name: e.target.value })}
+                      onChange={(e) =>
+                        setNewCompetition({
+                          ...newCompetition,
+                          name: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Status
+                      {t("status")}
                     </label>
                     <select
                       value={newCompetition.status}
-                      onChange={(e) => setNewCompetition({ ...newCompetition, status: e.target.value as Competition['status'] })}
+                      onChange={(e) =>
+                        setNewCompetition({
+                          ...newCompetition,
+                          status: e.target.value as Competition["status"],
+                        })
+                      }
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                       required
                     >
-                      <option value="Upcoming">Upcoming</option>
-                      <option value="Ongoing">Ongoing</option>
-                      <option value="Completed">Completed</option>
+                      <option value="Upcoming">{t("upcoming")}</option>
+                      <option value="Ongoing">{t("live")}</option>
+                      <option value="Completed">{t("completed")}</option>
                     </select>
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Description
+                    {t("description")}
                   </label>
                   <Textarea
-                    placeholder="Enter competition description"
+                    placeholder={t("enterDescription")}
                     value={newCompetition.description}
-                    onChange={(e) => setNewCompetition({ ...newCompetition, description: e.target.value })}
+                    onChange={(e) =>
+                      setNewCompetition({
+                        ...newCompetition,
+                        description: e.target.value,
+                      })
+                    }
                     rows={3}
                   />
                 </div>
@@ -598,24 +731,34 @@ export default function CompetitionPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Start Date
+                      {t("startDate")}
                     </label>
                     <Input
                       type="date"
                       value={newCompetition.startDate}
-                      onChange={(e) => setNewCompetition({ ...newCompetition, startDate: e.target.value })}
+                      onChange={(e) =>
+                        setNewCompetition({
+                          ...newCompetition,
+                          startDate: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      End Date
+                      {t("endDate")}
                     </label>
                     <Input
                       type="date"
                       value={newCompetition.endDate}
-                      onChange={(e) => setNewCompetition({ ...newCompetition, endDate: e.target.value })}
+                      onChange={(e) =>
+                        setNewCompetition({
+                          ...newCompetition,
+                          endDate: e.target.value,
+                        })
+                      }
                       required
                     />
                   </div>
@@ -623,27 +766,34 @@ export default function CompetitionPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Participants</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {t("participants")}
+                    </h3>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={addParticipant}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Participant
+                      {t("addParticipant")}
                     </Button>
                   </div>
 
                   <div className="space-y-2">
                     <Input
-                      placeholder="Enter participant name"
+                      placeholder={t("enterParticipantName")}
                       value={newParticipant.name}
-                      onChange={(e) => setNewParticipant({ name: e.target.value })}
+                      onChange={(e) =>
+                        setNewParticipant({ name: e.target.value })
+                      }
                     />
                     {newCompetition.participants.length > 0 && (
                       <div className="space-y-2">
                         {newCompetition.participants.map((p) => (
-                          <div key={p.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded">
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                          >
                             <span className="text-sm">{p.name}</span>
                             <Button
                               variant="destructive"
@@ -661,35 +811,46 @@ export default function CompetitionPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Judges</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {t("judges")}
+                    </h3>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={addJudge}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Judge
+                      {t("addJudge")}
                     </Button>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Input
-                      placeholder="Enter judge name"
+                      placeholder={t("enterJudgeName")}
                       value={newJudge.name}
-                      onChange={(e) => setNewJudge({ ...newJudge, name: e.target.value })}
+                      onChange={(e) =>
+                        setNewJudge({ ...newJudge, name: e.target.value })
+                      }
                     />
                     <Input
-                      placeholder="Enter judge email"
+                      placeholder={t("enterJudgeEmail")}
                       value={newJudge.email}
-                      onChange={(e) => setNewJudge({ ...newJudge, email: e.target.value })}
+                      onChange={(e) =>
+                        setNewJudge({ ...newJudge, email: e.target.value })
+                      }
                     />
                   </div>
 
                   {newCompetition.judges.length > 0 && (
                     <div className="space-y-2">
                       {newCompetition.judges.map((j) => (
-                        <div key={j.id} className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded">
-                          <span className="text-sm">{j.name} ({j.email})</span>
+                        <div
+                          key={j.id}
+                          className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                        >
+                          <span className="text-sm">
+                            {j.name} ({j.email})
+                          </span>
                           <Button
                             variant="destructive"
                             size="icon"
@@ -705,35 +866,46 @@ export default function CompetitionPage() {
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">Judging Criteria</h3>
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                      {t("judgingCriteria")}
+                    </h3>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={addCriteriaField}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Criteria
+                      {t("addCriteria")}
                     </Button>
                   </div>
 
                   <div className="space-y-4">
                     {newCompetition.criteria.map((criterion) => (
-                      <div key={criterion.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                      <div
+                        key={criterion.id}
+                        className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
+                      >
                         <div className="md:col-span-5 space-y-2">
                           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Criterion Name
+                            {t("criterionName")}
                           </label>
                           <Input
-                            placeholder="Enter criterion name"
+                            placeholder={t("enterCriterionName")}
                             value={criterion.name}
-                            onChange={(e) => handleCriteriaChange(criterion.id, 'name', e.target.value)}
+                            onChange={(e) =>
+                              handleCriteriaChange(
+                                criterion.id,
+                                "name",
+                                e.target.value
+                              )
+                            }
                             required
                           />
                         </div>
 
                         <div className="md:col-span-5 space-y-2">
                           <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Weight (%)
+                            {t("weight")}
                           </label>
                           <div className="flex items-center space-x-2">
                             <Input
@@ -742,7 +914,13 @@ export default function CompetitionPage() {
                               max="100"
                               placeholder="0-100"
                               value={criterion.weight}
-                              onChange={(e) => handleCriteriaChange(criterion.id, 'weight', e.target.value)}
+                              onChange={(e) =>
+                                handleCriteriaChange(
+                                  criterion.id,
+                                  "weight",
+                                  e.target.value
+                                )
+                              }
                               required
                             />
                             <Percent className="h-4 w-4 text-gray-500" />
@@ -765,10 +943,20 @@ export default function CompetitionPage() {
                   <div className="pt-2">
                     <div className="flex justify-between items-center">
                       <span className="text-sm text-gray-600 dark:text-gray-400">
-                        Total Weight: {newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0)}%
+                        {t("totalWeight", {
+                          value: newCompetition.criteria.reduce(
+                            (sum, c) => sum + Number(c.weight),
+                            0
+                          ).toString(),
+                        })}
                       </span>
-                      {newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0) !== 100 && (
-                        <span className="text-sm text-red-600">Total must be 100%</span>
+                      {newCompetition.criteria.reduce(
+                        (sum, c) => sum + Number(c.weight),
+                        0
+                      ) !== 100 && (
+                        <span className="text-sm text-red-600">
+                          {t("totalMustBe100")}
+                        </span>
                       )}
                     </div>
                   </div>
@@ -781,12 +969,17 @@ export default function CompetitionPage() {
                       !newCompetition.name ||
                       !newCompetition.startDate ||
                       !newCompetition.endDate ||
-                      newCompetition.criteria.some(c => !c.name || c.weight <= 0) ||
-                      newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0) !== 100
+                      newCompetition.criteria.some(
+                        (c) => !c.name || c.weight <= 0
+                      ) ||
+                      newCompetition.criteria.reduce(
+                        (sum, c) => sum + Number(c.weight),
+                        0
+                      ) !== 100
                     }
                     className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
                   >
-                    Create Competition
+                    {t("createCompetition")}
                   </Button>
                 </div>
               </CardContent>
@@ -796,4 +989,6 @@ export default function CompetitionPage() {
       </div>
     </div>
   );
-}
+};
+
+export default CompetitionPage;

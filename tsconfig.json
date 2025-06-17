@@ -34,7 +34,7 @@
     "next-env.d.ts",
     "src/.next/types/**/*.ts",
     ".next/types/**/*.ts"
-, "src/app/pages/login/page.js", "src/app/components/header.tsx"  ],
+, "src/app/pages/login/page.js", "src/app/components/header.tsx", "src/lib/mongodb.ts", "src/lib/mongodb.js"  ],
   "exclude": [
     "node_modules"
   ]

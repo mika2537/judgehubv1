@@ -7,8 +7,12 @@ if (!uri) {
   throw new Error("Please define the MONGODB_URI environment variable");
 }
 
-let client;
-let clientPromise;
+let client: MongoClient;
+let clientPromise: Promise<MongoClient>;
+
+declare global {
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}
 
 if (process.env.NODE_ENV === "development") {
   if (!global._mongoClientPromise) {
@@ -23,7 +27,7 @@ if (process.env.NODE_ENV === "development") {
 
 export async function connectToDb() {
   const client = await clientPromise;
-  const db = client.db("judgehub"); // or use process.env.MONGODB_DB
+  const db = client.db(process.env.MONGODB_DB || "judgehub");
   return { client, db };
 }
 
