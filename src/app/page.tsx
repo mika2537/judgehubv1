@@ -3,7 +3,7 @@
 
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, useCallback, Suspense } from 'react';
 import {
   Card,
   CardContent,
@@ -66,18 +66,7 @@ function DashboardContent() {
   const [totalJudges, setTotalJudges] = useState<number>(0);
   const [submissionsToday] = useState<number>(0);
 
-  useEffect(() => {
-    if (status === 'unauthenticated') {
-      const redirectTo = searchParams?.get('redirect') || '/pages/dashboard';
-      sessionStorage.setItem('loginRedirect', redirectTo);
-      router.push('pages/login');
-    } else if (status === 'authenticated') {
-      fetchCompetitions();
-      fetchJudgeCount();
-    }
-  }, [status, router, searchParams]);
-
-  const fetchCompetitions = async () => {
+  const fetchCompetitions = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -119,9 +108,9 @@ function DashboardContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
-  const fetchJudgeCount = async () => {
+  const fetchJudgeCount = useCallback(async () => {
     try {
       const response = await fetch('/api/stats/judges');
       if (!response.ok) throw new Error(t('failedJudgeCount'));
@@ -130,7 +119,18 @@ function DashboardContent() {
     } catch (err) {
       console.error('Failed to fetch judge count:', err);
     }
-  };
+  }, [t]);
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      const redirectTo = searchParams?.get('redirect') || '/pages/dashboard';
+      sessionStorage.setItem('loginRedirect', redirectTo);
+      router.push('pages/login');
+    } else if (status === 'authenticated') {
+      fetchCompetitions();
+      fetchJudgeCount();
+    }
+  }, [status, router, searchParams, fetchCompetitions, fetchJudgeCount]);
 
   const stats = [
     {

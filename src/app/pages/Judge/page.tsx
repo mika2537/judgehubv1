@@ -79,7 +79,6 @@ const Judge = () => {
           ...comp,
           scoredParticipantIds: comp.scoredParticipantIds || [],
         })));
-        setLanguage(data.language || "en");
         if (!data.competitions.length) {
           setError(t("noCompetitionsAvailable"));
         }

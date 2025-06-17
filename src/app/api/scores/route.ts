@@ -14,6 +14,27 @@ interface ScoreInput {
   createdAt: string;
 }
 
+interface Participant {
+  id: string;
+  name?: string;
+  // add other participant fields if needed
+}
+
+interface Criterion {
+  id: string;
+  name?: string;
+  weight?: number;
+  // add other criterion fields if needed
+}
+
+interface Competition {
+  _id: ObjectId;
+  participants: Participant[];
+  criteria: Criterion[];
+  scoredParticipantIds?: string[];
+  // add other competition fields if needed
+}
+
 export async function POST(req: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -36,19 +57,22 @@ export async function POST(req: NextRequest) {
     const { db } = await connectToDb();
 
     // Validate competition exists
-    const competition = await db.collection("competitions").findOne({ _id: new ObjectId(competitionId) });
+    const competition = await db.collection<Competition>("competitions").findOne({
+      _id: new ObjectId(competitionId),
+    });
+
     if (!competition) {
       return NextResponse.json({ message: "Competition not found" }, { status: 404 });
     }
 
     // Validate participant exists in competition
-    const participant = competition.participants.find((p: any) => p.id === participantId);
+    const participant = competition.participants.find((p) => p.id === participantId);
     if (!participant) {
       return NextResponse.json({ message: "Participant not found in competition" }, { status: 404 });
     }
 
     // Validate all criteria are scored
-    const criteriaIds = competition.criteria.map((c: any) => c.id);
+    const criteriaIds = competition.criteria.map((c) => c.id);
     if (
       scores.length !== criteriaIds.length ||
       !scores.every((s) => criteriaIds.includes(s.criterionId) && s.score >= 1 && s.score <= 10)

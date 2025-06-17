@@ -18,10 +18,6 @@ import {
 import LanguageSelector from "@/app/components/LanguageSelector";
 import { useLanguage } from "@/context/languageContext";
 
-interface User {
-  name?: string;
-  role?: "admin" | "judge" | "viewer";
-}
 
 interface NavItem {
   path: string;

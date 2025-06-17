@@ -448,10 +448,20 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [currentLanguage, setCurrentLanguage] = useState('en');
+  // Initialize from localStorage or default to 'en'
+  const [currentLanguage, setCurrentLanguage] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('language') || 'en';
+    }
+    return 'en';
+  });
 
   const setLanguage = (languageCode: string) => {
     setCurrentLanguage(languageCode);
+    // Save to localStorage
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('language', languageCode);
+    }
   };
 
   const t = (key: string, params?: Record<string, string>): string => {

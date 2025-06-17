@@ -10,9 +10,11 @@ if (!uri) {
 let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
+/* eslint-disable no-var */
 declare global {
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
+/* eslint-enable no-var */
 
 if (process.env.NODE_ENV === "development") {
   if (!global._mongoClientPromise) {

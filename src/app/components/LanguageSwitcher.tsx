@@ -2,7 +2,7 @@
 import { useLanguage } from '@/context/languageContext';
 
 export default function LanguageSwitcher() {
-  const { currentLanguage, setLanguage, t, getCurrentLanguage } = useLanguage();
+  const { currentLanguage, setLanguage, t } = useLanguage();
 
   return (
     <div className="flex gap-2 items-center">

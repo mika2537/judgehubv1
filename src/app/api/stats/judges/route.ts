@@ -1,6 +1,6 @@
 // src/app/api/stats/judges/route.ts
 import { connectToDb } from "@/lib/mongodb";
-import { NextRequest, NextResponse } from "next/server";
+import {  NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/authOptions";
 
@@ -13,7 +13,7 @@ async function isAdminSession() {
   return true;
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const isAdmin = await isAdminSession();
     if (!isAdmin) {
