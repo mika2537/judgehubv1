@@ -35,6 +35,7 @@ interface Competition {
   judges: number;
   endDate: string;
   criteria: Criterion[];
+  judgedParticipants?: number; // Added to store per-competition judged count
 }
 
 interface ScoreboardEntry {
@@ -53,7 +54,6 @@ const Scoreboard = () => {
   const [selectedCompetition, setSelectedCompetition] = useState<string | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [leaderboard, setLeaderboard] = useState<ScoreboardEntry[]>([]);
-  const [isLive] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -70,7 +70,18 @@ const Scoreboard = () => {
       if (!Array.isArray(data)) {
         throw new Error(t("invalidResponseFormat"));
       }
-      setCompetitions(data);
+      // Fetch judgedParticipants for each competition
+      const competitionsWithJudged = await Promise.all(
+        data.map(async (comp: Competition) => {
+          const scoreboardResponse = await fetch(`/api/scoreboard/${comp._id}`);
+          const scoreboardData = await scoreboardResponse.json();
+          return {
+            ...comp,
+            judgedParticipants: Array.isArray(scoreboardData) ? scoreboardData.length : 0,
+          };
+        })
+      );
+      setCompetitions(competitionsWithJudged);
       if (data.length > 0) {
         setSelectedCompetition(data[0]._id);
       } else {
@@ -88,13 +99,12 @@ const Scoreboard = () => {
     }
   }, [t, toast]);
 
-  // Fetch scoreboard
-  const fetchScoreboard = useCallback(async () => {
-    if (!selectedCompetition) return;
+  // Fetch scoreboard with AbortController
+  const fetchScoreboard = useCallback(async (competitionId: string, signal: AbortSignal) => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`/api/scoreboard/${selectedCompetition}`);
+      const response = await fetch(`/api/scoreboard/${competitionId}`, { signal });
       if (!response.ok) {
         throw new Error(t("failedFetchScoreboard", { status: response.status.toString() }));
       }
@@ -110,6 +120,7 @@ const Scoreboard = () => {
         }));
       setLeaderboard(sortedData);
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : t("unknownError"));
       toast({
         title: t("errorTitle"),
@@ -119,7 +130,7 @@ const Scoreboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedCompetition, t, toast]);
+  }, [t, toast]);
 
   // Redirect unauthenticated users and fetch competitions
   useEffect(() => {
@@ -132,9 +143,10 @@ const Scoreboard = () => {
 
   // Fetch scoreboard when selectedCompetition changes
   useEffect(() => {
-    if (selectedCompetition) {
-      fetchScoreboard();
-    }
+    if (!selectedCompetition) return;
+    const controller = new AbortController();
+    fetchScoreboard(selectedCompetition, controller.signal);
+    return () => controller.abort();
   }, [selectedCompetition, fetchScoreboard]);
 
   const getRankIcon = (rank: number) => {
@@ -171,6 +183,10 @@ const Scoreboard = () => {
     return <div className="w-4 h-4 bg-gray-300 rounded-full"></div>;
   };
 
+  const isCompetitionLive = (comp: Competition) => {
+    return comp.status.toLowerCase() === "ongoing" || new Date(comp.endDate) > new Date();
+  };
+
   const selectedComp = competitions.find((comp) => comp._id === selectedCompetition) ?? null;
   const judgedParticipants = leaderboard.length;
   const totalParticipants = Array.isArray(selectedComp?.participants)
@@ -194,7 +210,7 @@ const Scoreboard = () => {
         <Button
           onClick={() => {
             fetchCompetitions();
-            if (selectedCompetition) fetchScoreboard();
+            if (selectedCompetition) fetchScoreboard(selectedCompetition, new AbortController().signal);
           }}
           className="bg-blue-600 text-white hover:bg-blue-700"
         >
@@ -236,7 +252,7 @@ const Scoreboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              {isLive && (
+              {selectedComp && isCompetitionLive(selectedComp) && (
                 <div className="flex items-center space-x-2">
                   <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
                   <span className="text-sm text-red-600 dark:text-red-400 font-semibold">
@@ -247,7 +263,7 @@ const Scoreboard = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={fetchScoreboard}
+                onClick={() => selectedCompetition && fetchScoreboard(selectedCompetition, new AbortController().signal)}
                 className="hover:bg-gray-200 dark:hover:bg-gray-700 transition-all duration-200"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
@@ -281,7 +297,7 @@ const Scoreboard = () => {
                         {comp.name}
                       </div>
                       <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {t("progress")}: {judgedParticipants}/{comp.participants.length}
+                        {t("progress")}: {comp.judgedParticipants ?? 0}/{comp.participants.length}
                       </div>
                       <Badge
                         variant="outline"
@@ -416,12 +432,12 @@ const Scoreboard = () => {
                   ))
                 )}
               </div>
-              {totalParticipants > judgedParticipants && (
-                <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/10 rounded-lg border border-blue-200 dark:border-blue-800">
+              {leaderboard.length > 0 && totalParticipants === judgedParticipants && (
+                <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-800">
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-blue-600 rounded-full animate-pulse"></div>
-                    <span className="text-sm text-blue-700 dark:text-blue-300">
-                      {t("waitingForMoreTeams", { count: (totalParticipants - judgedParticipants).toString() })}
+                    <div className="w-3 h-3 bg-green-600 rounded-full"></div>
+                    <span className="text-sm text-green-700 dark:text-green-300">
+                      {t("finalRankings", { defaultValue: "Final rankings: All scores have been submitted." })}
                     </span>
                   </div>
                 </div>

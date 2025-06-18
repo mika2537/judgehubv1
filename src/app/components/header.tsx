@@ -91,13 +91,13 @@ export function AppHeader() {
         >
           <Image
             src="/favicon.ico"
-            alt={t("logoAlt")}
+            alt={"JudgeHub"}
             width={40}
             height={40}
             className="mr-2 rounded"
           />
           <span className="font-bold text-xl bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent">
-            {t("judgeHub")}
+            {"JudgeHub"}
           </span>
         </Link>
 
@@ -143,13 +143,13 @@ export function AppHeader() {
               {/* Profile and Sign Out */}
               <div className="hidden md:flex items-center space-x-3">
                 <Button
-                  onClick={() => router.push("/profile")}
+                  onClick={() => router.push("/pages/profile")}
                   className="flex items-center hover:opacity-80 transition-opacity"
                   aria-label={`${t("profile")} ${session.user.name || ""}`}
                 >
                   <Image
                     src="/eventImage/userprofile.png"
-                    alt={t("profileImageAlt")}
+                    alt={`${session.user.name || t("unknownUser")} profile`}
                     width={32}
                     height={32}
                     className="rounded-full mr-2 border border-gray-200 dark:border-gray-600"

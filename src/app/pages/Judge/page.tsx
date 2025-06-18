@@ -1,4 +1,3 @@
-// src/app/components/Judge.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -33,7 +32,7 @@ const Judge = () => {
   const { data: session, status } = useSession();
   const router = useRouter();
   const { toast } = useToast();
-  const { t, setLanguage } = useLanguage();
+  const { t } = useLanguage();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [selectedCompetitionIndex, setSelectedCompetitionIndex] = useState(0);
   const [selectedParticipantIndex, setSelectedParticipantIndex] = useState(0);
@@ -43,7 +42,6 @@ const Judge = () => {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    console.log("Judge: Session status:", status, "Session data:", session);
     if (status === "unauthenticated") {
       router.push("/pages/login");
     } else if (
@@ -71,7 +69,6 @@ const Judge = () => {
           throw new Error(errorData.message || t("failedFetchCompetitions", { status: res.status.toString() }));
         }
         const data = await res.json();
-        console.log("Judge: Fetched data from /api/judge:", data);
         if (!Array.isArray(data.competitions)) {
           throw new Error(t("invalidResponseFormat"));
         }
@@ -83,7 +80,6 @@ const Judge = () => {
           setError(t("noCompetitionsAvailable"));
         }
       } catch (err) {
-        console.error("Judge: Fetch error:", err);
         setError(err instanceof Error ? err.message : t("unknownError"));
       } finally {
         setLoading(false);
@@ -93,7 +89,7 @@ const Judge = () => {
     if (status === "authenticated") {
       fetchCompetitions();
     }
-  }, [status, t, setLanguage]);
+  }, [status, t]);
 
   useEffect(() => {
     if (!competitions.length) return;
@@ -164,12 +160,8 @@ const Judge = () => {
       return;
     }
 
-    const totalScore = competition.criteria.reduce((total, criteria) => {
-      const score = scores[`${participant.id}-${criteria.id}`] || 0;
-      return total + (score * criteria.weight) / 100;
-    }, 0);
-
     try {
+      const controller = new AbortController();
       const res = await fetch("/api/scores", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -181,10 +173,10 @@ const Judge = () => {
             score: scores[`${participant.id}-${c.id}`],
             comment: comments[`${participant.id}-${c.id}`] || "",
           })),
-          totalScore,
           judgeId: session.user.id,
           createdAt: new Date(),
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok) {
@@ -240,7 +232,7 @@ const Judge = () => {
           setSelectedParticipantIndex(
             Array.isArray(nextComp.participants)
               ? nextComp.participants.findIndex((p) => p.id === nextUnscored[0].id)
-              : -1
+              : 0
           );
         } else {
           toast({
@@ -255,6 +247,7 @@ const Judge = () => {
         });
       }
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       toast({
         title: t("errorTitle"),
         description: err instanceof Error ? err.message : t("unknownError"),
@@ -286,18 +279,21 @@ const Judge = () => {
           onClick={() => {
             setLoading(true);
             setError(null);
-            fetch("/api/judge", { credentials: "include", headers: { "Accept-Language": navigator.language } })
+            const controller = new AbortController();
+            fetch("/api/judge", {
+              credentials: "include",
+              headers: { "Accept-Language": navigator.language },
+              signal: controller.signal,
+            })
               .then((res) => {
                 if (!res.ok) throw new Error(t("failedFetchCompetitions", { status: res.status.toString() }));
                 return res.json();
               })
               .then((data) => {
-                console.log("Judge: Retry fetched competitions:", data);
                 setCompetitions(data.competitions.map((comp: Competition) => ({
                   ...comp,
                   scoredParticipantIds: comp.scoredParticipantIds || [],
                 })));
-                setLanguage(data.language || "en");
                 if (!data.competitions.length) setError(t("noCompetitionsAvailable"));
               })
               .catch((err) => setError(err.message))
@@ -330,11 +326,6 @@ const Judge = () => {
       </div>
     );
   }
-
-  const totalScore = competition.criteria.reduce((total, criteria) => {
-    const score = scores[`${participant.id}-${criteria.id}`] || 0;
-    return total + (score * criteria.weight) / 100;
-  }, 0);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
@@ -382,7 +373,7 @@ const Judge = () => {
                       unscored.length > 0
                         ? Array.isArray(nextComp.participants)
                           ? nextComp.participants.findIndex((p) => p.id === unscored[0].id)
-                          : -1
+                          : 0
                         : 0
                     );
                     setScores({});
@@ -406,7 +397,7 @@ const Judge = () => {
                     <span>
                       {Array.isArray(competition.participants)
                         ? competition.participants.length
-                        : competition.participants}{" "}
+                        : 0}{" "}
                       {t("participants")}
                     </span>
                   </div>
@@ -466,107 +457,101 @@ const Judge = () => {
           </div>
 
           <div className="lg:col-span-3">
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>{t("scoring")} {participant.name}</span>
-                  <div className="text-right">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">{t("totalScore")}</div>
-                    <div className={`text-2xl font-bold ${getScoreColor(totalScore)}`}>
-                      {totalScore.toFixed(1)}/10
-                    </div>
+  <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
+    <CardHeader>
+      <CardTitle className="flex items-center justify-between">
+        <span>{t("scoring")} {participant.name}</span>
+      </CardTitle>
+    </CardHeader>
+    <CardContent>
+      <div className="space-y-8">
+        {competition.criteria.map((criteria, index) => {
+          const scoreKey = `${participant.id}-${criteria.id}`;
+          const currentScore = scores[scoreKey] || 5;
+          const currentComment = comments[scoreKey] || "";
+          const isScored = (competition.scoredParticipantIds || []).includes(participant.id);
+
+          return (
+            <div
+              key={criteria.id}
+              className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-4 animate-fade-in"
+              style={{ animationDelay: `${index * 0.1}s` }}
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {criteria.name}
+                </h3>
+                <Badge variant="outline">{t("weight", { value: criteria.weight.toString() })}</Badge>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t("scoreLabel")} (1-10)
+                    </label>
+                    <span className={`text-lg font-bold ${getScoreColor(currentScore)}`}>
+                      {currentScore}/10
+                    </span>
                   </div>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-8">
-                  {competition.criteria.map((criteria, index) => {
-                    const scoreKey = `${participant.id}-${criteria.id}`;
-                    const currentScore = scores[scoreKey] || 5;
-                    const currentComment = comments[scoreKey] || "";
-                    const isScored = (competition.scoredParticipantIds || []).includes(participant.id);
-
-                    return (
-                      <div
-                        key={criteria.id}
-                        className="p-6 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-4 animate-fade-in"
-                        style={{ animationDelay: `${index * 0.1}s` }}
-                      >
-                        <div className="flex items-center justify-between">
-                          <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                            {criteria.name}
-                          </h3>
-                          <Badge variant="outline">{t("weight", { value: criteria.weight.toString() })}</Badge>
-                        </div>
-
-                        <div className="space-y-4">
-                          <div>
-                            <div className="flex items-center justify-between mb-3">
-                              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                                {t("scoreLabel")} (1-10)
-                              </label>
-                              <span className={`text-lg font-bold ${getScoreColor(currentScore)}`}>
-                                {currentScore}/10
-                              </span>
-                            </div>
-                            <Slider
-                              value={[currentScore]}
-                              onValueChange={(value) => handleScoreChange(criteria.id, value)}
-                              max={10}
-                              min={1}
-                              step={0.1}
-                              className="w-full"
-                              disabled={isScored}
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                              <span>{t("poor")} (1)</span>
-                              <span>{t("average")} (5)</span>
-                              <span>{t("excellent")} (10)</span>
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
-                              {t("commentsLabel")} ({t("optional")})
-                            </label>
-                            <Textarea
-                              placeholder={t("commentPlaceholder", { criteria: criteria.name.toLowerCase() })}
-                              value={currentComment}
-                              onChange={(e) => handleCommentChange(criteria.id, e.target.value)}
-                              className="resize-none transition-all duration-200 focus:scale-[1.01]"
-                              rows={2}
-                              disabled={isScored}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div className="flex justify-end space-x-4 pt-6">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setScores({});
-                        setComments({});
-                      }}
-                      disabled={(competition.scoredParticipantIds || []).includes(participant.id)}
-                    >
-                      {t("clearScores")}
-                    </Button>
-                    <Button
-                      onClick={handleSubmitScores}
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 hover:scale-105"
-                      disabled={(competition.scoredParticipantIds || []).includes(participant.id)}
-                    >
-                      <Send className="h-4 w-4 mr-2" />
-                      {t("submitScores")}
-                    </Button>
+                  <Slider
+                    value={[currentScore]}
+                    onValueChange={(value) => handleScoreChange(criteria.id, value)}
+                    max={10}
+                    min={1}
+                    step={0.1}
+                    className="w-full" // Ensure slider spans full width
+                    disabled={isScored}
+                  />
+                  <div className="flex justify-between text-xs text-gray-500 mt-1">
+                    <span>{t("poor")} (1)</span>
+                    <span>{t("average")} (5)</span>
+                    <span>{t("excellent")} (10)</span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2 block">
+                    {t("commentsLabel")} ({t("optional")})
+                  </label>
+                  <Textarea
+                    placeholder={t("commentPlaceholder", { criteria: criteria.name.toLowerCase() })}
+                    value={currentComment}
+                    onChange={(e) => handleCommentChange(criteria.id, e.target.value)}
+                    className="resize-none transition-all duration-200 focus:scale-[1.01]"
+                    rows={2}
+                    disabled={isScored}
+                  />
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        <div className="flex justify-end space-x-4 pt-6">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setScores({});
+              setComments({});
+            }}
+            disabled={(competition.scoredParticipantIds || []).includes(participant.id)}
+          >
+            {t("clearScores")}
+          </Button>
+          <Button
+            onClick={handleSubmitScores}
+            className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 hover:scale-105"
+            disabled={(competition.scoredParticipantIds || []).includes(participant.id)}
+          >
+            <Send className="h-4 w-4 mr-2" />
+            {t("submitScores")}
+          </Button>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+</div>
         </div>
       </div>
     </div>
