@@ -303,21 +303,21 @@ const Scoreboard = () => {
                   <SelectValue placeholder={t("selectCompetition", { defaultValue: "Select a competition" })} />
                 </SelectTrigger>
                 <SelectContent className="bg-black text-white">
-  {competitions.map((comp) => (
-    <SelectItem
-      key={comp._id}
-      value={comp._id}
-      className="bg-black text-white hover:bg-gray-800"
-    >
-      <div className="flex items-center justify-between w-full">
-        <span>{comp.name}</span>
-        <Badge variant="outline" className="ml-2">
-          {t(comp.status.toLowerCase())}
-        </Badge>
-      </div>
-    </SelectItem>
-  ))}
-</SelectContent>
+                  {competitions.map((comp) => (
+                    <SelectItem
+                      key={comp._id}
+                      value={comp._id}
+                      className="bg-black text-white hover:bg-gray-800"
+                    >
+                      <div className="flex items-center justify-between w-full">
+                        <span>{comp.name}</span>
+                        <Badge variant="outline" className="ml-2">
+                          {t(comp.status.toLowerCase())}
+                        </Badge>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
               </Select>
             </CardContent>
           </Card>
@@ -387,11 +387,7 @@ const Scoreboard = () => {
                   leaderboard.map((entry, index) => (
                     <div
                       key={entry._id}
-                      className={`p-6 rounded-lg border transition-all duration-300 hover:shadow-md ${
-                        entry.rank! <= 3
-                          ? "bg-gradient-to-r from-yellow-50 to-amber-50 dark:from-yellow-900/10 dark:to-amber-900/10 border-yellow-200 dark:border-yellow-800"
-                          : "bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600"
-                      }`}
+                      className={`p-6 rounded-lg border transition-all duration-300 hover:shadow-md ${getRankColor(entry.rank!)}`}
                       style={{ animationDelay: `${index * 0.1}s` }}
                     >
                       <div className="flex items-center justify-between">
