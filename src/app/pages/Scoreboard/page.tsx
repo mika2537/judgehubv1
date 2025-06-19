@@ -11,6 +11,13 @@ import {
 } from "@/app/components/ui/card";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/app/components/ui/select";
 import { Trophy, Medal, Star, TrendingUp, Users, RefreshCw, ArrowLeft } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
 import { useLanguage } from "@/context/languageContext";
@@ -35,7 +42,7 @@ interface Competition {
   judges: number;
   endDate: string;
   criteria: Criterion[];
-  judgedParticipants?: number; // Added to store per-competition judged count
+  judgedParticipants?: number;
 }
 
 interface ScoreboardEntry {
@@ -70,15 +77,19 @@ const Scoreboard = () => {
       if (!Array.isArray(data)) {
         throw new Error(t("invalidResponseFormat"));
       }
-      // Fetch judgedParticipants for each competition
       const competitionsWithJudged = await Promise.all(
         data.map(async (comp: Competition) => {
-          const scoreboardResponse = await fetch(`/api/scoreboard/${comp._id}`);
-          const scoreboardData = await scoreboardResponse.json();
-          return {
-            ...comp,
-            judgedParticipants: Array.isArray(scoreboardData) ? scoreboardData.length : 0,
-          };
+          try {
+            const scoreboardResponse = await fetch(`/api/scoreboard/${comp._id}`);
+            const scoreboardData = await scoreboardResponse.json();
+            return {
+              ...comp,
+              judgedParticipants: Array.isArray(scoreboardData) ? scoreboardData.length : 0,
+            };
+          } catch (err) {
+            console.warn(`Failed to fetch scoreboard for competition ${comp._id}:`, err);
+            return { ...comp, judgedParticipants: 0 };
+          }
         })
       );
       setCompetitions(competitionsWithJudged);
@@ -109,8 +120,12 @@ const Scoreboard = () => {
         throw new Error(t("failedFetchScoreboard", { status: response.status.toString() }));
       }
       const data = await response.json();
+      console.log(`Scoreboard data for competition ${competitionId}:`, data);
       if (!Array.isArray(data)) {
         throw new Error(t("invalidResponseFormat"));
+      }
+      if (data.length === 0) {
+        console.warn(`No scores returned for competition ${competitionId}`);
       }
       const sortedData = data
         .sort((a: ScoreboardEntry, b: ScoreboardEntry) => b.totalScore - a.totalScore)
@@ -152,14 +167,14 @@ const Scoreboard = () => {
   const getRankIcon = (rank: number) => {
     switch (rank) {
       case 1:
-        return <Trophy className="h-5 w-5 text-yellow-500" />;
+        return <Trophy className="h-6 w-6 text-yellow-500" />;
       case 2:
-        return <Medal className="h-5 w-5 text-gray-400" />;
+        return <Medal className="h-6 w-6 text-gray-400" />;
       case 3:
-        return <Medal className="h-5 w-5 text-amber-600" />;
+        return <Medal className="h-6 w-6 text-amber-600" />;
       default:
         return (
-          <span className="w-5 h-5 flex items-center justify-center text-sm font-bold text-gray-500">
+          <span className="w-8 h-8 flex items-center justify-center text-lg font-bold text-gray-500">
             #{rank}
           </span>
         );
@@ -188,7 +203,7 @@ const Scoreboard = () => {
   };
 
   const selectedComp = competitions.find((comp) => comp._id === selectedCompetition) ?? null;
-  const judgedParticipants = leaderboard.length;
+  const judgedParticipants = leaderboard.filter((entry) => entry.totalScore > 0).length;
   const totalParticipants = Array.isArray(selectedComp?.participants)
     ? selectedComp.participants.length
     : 0;
@@ -280,35 +295,30 @@ const Scoreboard = () => {
               <CardTitle className="text-lg font-semibold">{t("selectEvent")}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {competitions.map((comp) => (
-                  <Button
-                    key={comp._id}
-                    variant={selectedCompetition === comp._id ? "default" : "outline"}
-                    className={`p-4 h-auto text-left justify-start items-start transition-all duration-200 ${
-                      selectedCompetition === comp._id
-                        ? getRankColor(1)
-                        : "hover:bg-gray-100 dark:hover:bg-gray-700"
-                    }`}
-                    onClick={() => setSelectedCompetition(comp._id)}
-                  >
-                    <div>
-                      <div className="font-semibold text-gray-900 dark:text-white">
-                        {comp.name}
-                      </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
-                        {t("progress")}: {comp.judgedParticipants ?? 0}/{comp.participants.length}
-                      </div>
-                      <Badge
-                        variant="outline"
-                        className="mt-2 border-gray-300 dark:border-gray-600"
-                      >
-                        {t(comp.status.toLowerCase())}
-                      </Badge>
-                    </div>
-                  </Button>
-                ))}
-              </div>
+              <Select
+                value={selectedCompetition || ""}
+                onValueChange={setSelectedCompetition}
+              >
+                <SelectTrigger className="w-full max-w-md">
+                  <SelectValue placeholder={t("selectCompetition", { defaultValue: "Select a competition" })} />
+                </SelectTrigger>
+                <SelectContent className="bg-black text-white">
+  {competitions.map((comp) => (
+    <SelectItem
+      key={comp._id}
+      value={comp._id}
+      className="bg-black text-white hover:bg-gray-800"
+    >
+      <div className="flex items-center justify-between w-full">
+        <span>{comp.name}</span>
+        <Badge variant="outline" className="ml-2">
+          {t(comp.status.toLowerCase())}
+        </Badge>
+      </div>
+    </SelectItem>
+  ))}
+</SelectContent>
+              </Select>
             </CardContent>
           </Card>
         </div>
@@ -391,8 +401,18 @@ const Scoreboard = () => {
                             {getChangeIcon()}
                           </div>
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                              {t("team")} {selectedComp.participants.find((p) => p.id === entry.participantId)?.name || t("unknown")}
+                            <h3 className="text-xl font-semibold text-gray-900 dark:text-white">
+                              {(() => {
+                                const participantName = selectedComp.participants.find(
+                                  (p) => p.id === entry.participantId
+                                )?.name;
+                                if (!participantName) {
+                                  console.warn(
+                                    `Participant ${entry.participantId} not found in competition ${selectedComp._id}`
+                                  );
+                                }
+                                return participantName || t("unknown");
+                              })()}
                             </h3>
                             <p className="text-sm text-gray-500 dark:text-gray-400">
                               {t("performance")}
@@ -400,7 +420,7 @@ const Scoreboard = () => {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-xl font-bold text-gray-900 dark:text-white">
+                          <div className="text-3xl font-bold text-gray-900 dark:text-white">
                             {entry.totalScore.toFixed(1)}
                           </div>
                           <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -413,12 +433,17 @@ const Scoreboard = () => {
                           const scoreEntry = entry.scores.find(
                             (s) => s.criterionId === criterion.id
                           );
+                          if (!scoreEntry) {
+                            console.warn(
+                              `Missing score for criterion ${criterion.id} for participant ${entry.participantId}`
+                            );
+                          }
                           return (
                             <div key={criterion.id} className="text-center">
                               <div className="text-sm text-gray-500 dark:text-gray-400">
                                 {criterion.name}
                               </div>
-                              <div className="text-lg font-semibold text-gray-900 dark:text-white">
+                              <div className="text-2xl font-semibold text-gray-900 dark:text-white">
                                 {scoreEntry ? scoreEntry.score.toFixed(1) : "N/A"}
                               </div>
                               <div className="text-xs text-gray-400">
@@ -432,12 +457,12 @@ const Scoreboard = () => {
                   ))
                 )}
               </div>
-              {leaderboard.length > 0 && totalParticipants === judgedParticipants && (
-                <div className="mt-6 p-4 bg-green-50 dark:bg-green-900/10 rounded-lg border border-green-200 dark:border-green-800">
+              {leaderboard.length > 0 && (
+                <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/10 rounded-lg border border-yellow-200 dark:border-yellow-800">
                   <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-green-600 rounded-full"></div>
-                    <span className="text-sm text-green-700 dark:text-green-300">
-                      {t("finalRankings", { defaultValue: "Final rankings: All scores have been submitted." })}
+                    <div className="w-3 h-3 bg-yellow-600 rounded-full"></div>
+                    <span className="text-sm text-yellow-700 dark:text-yellow-300">
+                      {t("realTimeRankings", { defaultValue: "Real-time rankings: Updates as judges submit scores." })}
                     </span>
                   </div>
                 </div>
