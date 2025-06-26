@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useDebounce } from "use-debounce";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import {
@@ -24,11 +25,24 @@ import {
   User,
   Clock,
   CheckCircle,
+  Search,
 } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
 import { Textarea } from "@/app/components/ui/textarea";
 import { useLanguage } from "@/context/languageContext";
-import { TFunction } from 'i18next';
+import { useTheme } from "@/app/components/ThemeProvider";
+import { TFunction } from "i18next";
+import { Suspense } from "react";
+
+declare module "next-auth" {
+  interface Session {
+    user: {
+      id: string;
+      name?: string | null;
+      role?: string | null;
+    };
+  }
+}
 
 interface Participant {
   id: string;
@@ -59,62 +73,58 @@ interface Competition {
   criteria: Criterion[];
 }
 
-// Named component for status badge
-
-
 const StatusBadge = ({
   status,
   t,
 }: {
-  status: Competition['status'];
+  status: Competition["status"];
   t: TFunction;
 }) => {
-  switch (status) {
-    case 'Upcoming':
-      return (
-        <Badge
-          variant="secondary"
-          className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200"
-        >
-          <Clock className="h-3 w-3 mr-1" />
-          {t('upcoming')}
-        </Badge>
-      );
-    case 'Ongoing':
-      return (
-        <Badge
-          variant="secondary"
-          className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
-        >
-          <Award className="h-3 w-3 mr-1" />
-          {t('live')}
-        </Badge>
-      );
-    case 'Completed':
-      return (
-        <Badge
-          variant="secondary"
-          className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-        >
-          <CheckCircle className="h-3 w-3 mr-1" />
-          {t('completed')}
-        </Badge>
-      );
-    default:
-      return <Badge variant="secondary">{status}</Badge>;
-  }
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
+      case t("live").toLowerCase():
+        return "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200";
+      case t("scoring").toLowerCase():
+        return "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200";
+      case t("upcoming").toLowerCase():
+        return "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200";
+      case t("completed").toLowerCase():
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+      default:
+        return "bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200";
+    }
+  };
+
+  return (
+    <Badge
+      variant="secondary"
+      className={`flex items-center text-xl ${getStatusColor(t(status.toLowerCase()))}`}
+    >
+      {status === "Upcoming" && <Clock className="h-4 w-4 mr-1" />}
+      {status === "Ongoing" && <Award className="h-4 w-4 mr-1" />}
+      {status === "Completed" && <CheckCircle className="h-4 w-4 mr-1" />}
+      {t(status.toLowerCase())}
+    </Badge>
+  );
 };
 
-const CompetitionPage = () => {
-  const { data: session, status } = useSession();
+function CompetitionContent() {
+  const { data: session, status: authStatus } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { theme, toggleTheme } = useTheme();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"list" | "create">("list");
+
+  // Judge search functionality
+  const [judgeSearch, setJudgeSearch] = useState("");
+  const [debouncedJudgeSearch] = useDebounce(judgeSearch, 500);
+  const [availableJudges, setAvailableJudges] = useState<Judge[]>([]);
+  const [isSearchingJudges, setIsSearchingJudges] = useState(false);
 
   const [newCompetition, setNewCompetition] = useState<Omit<Competition, "_id">>({
     name: "",
@@ -128,58 +138,28 @@ const CompetitionPage = () => {
   });
 
   const [newParticipant, setNewParticipant] = useState({ name: "" });
-  const [newJudge, setNewJudge] = useState({ name: "", email: "" });
 
   const fetchCompetitions = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
       const res = await fetch("/api/competitions", { credentials: "include" });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        throw new Error(
-          errorData.message ||
-            t("failedFetchCompetitions", { status: res.status.toString() })
-        );
+        throw new Error(errorData.message || t("failedFetchCompetitions"));
       }
 
       const data = await res.json();
-      if (!Array.isArray(data)) {
-        throw new Error(t("invalidResponseFormat"));
-      }
-
-      const formattedData: Competition[] = data.map((item: Partial<Competition>) => ({
+      const formattedData: Competition[] = data.map((item: any) => ({
         _id: item._id?.toString(),
         name: item.name || t("unnamedCompetition"),
         description: item.description || "",
-        startDate: item.startDate
-          ? new Date(item.startDate).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
-        endDate: item.endDate
-          ? new Date(item.endDate).toISOString().split("T")[0]
-          : new Date().toISOString().split("T")[0],
+        startDate: item.startDate ? new Date(item.startDate).toISOString().split("T")[0] : "",
+        endDate: item.endDate ? new Date(item.endDate).toISOString().split("T")[0] : "",
         status: item.status || "Upcoming",
-        participants: Array.isArray(item.participants)
-          ? item.participants.map((p: Partial<Participant>) => ({
-              id: p.id || crypto.randomUUID(),
-              name: p.name || t("unnamedParticipant"),
-            }))
-          : [],
-        judges: Array.isArray(item.judges)
-          ? item.judges.map((j: Partial<Judge>) => ({
-              id: j.id || crypto.randomUUID(),
-              name: j.name || t("unnamedJudge"),
-              email: j.email || "",
-            }))
-          : [],
-        criteria: Array.isArray(item.criteria)
-          ? item.criteria.map((c: Partial<Criterion>) => ({
-              id: c.id || crypto.randomUUID(),
-              name: c.name || "",
-              weight: Number(c.weight) || 0,
-            }))
-          : [],
+        participants: item.participants || [],
+        judges: item.judges || [],
+        criteria: item.criteria || [],
       }));
 
       setCompetitions(formattedData);
@@ -197,19 +177,46 @@ const CompetitionPage = () => {
   }, [t, toast]);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/login?redirect=/competition");
-    } else if (status === "authenticated" && session?.user?.role !== "admin") {
+    if (authStatus === "unauthenticated") {
+      sessionStorage.setItem("loginRedirect", "/pages/Competition");
+      router.push("/pages/login");
+    } else if (authStatus === "authenticated" && session?.user?.role !== "admin") {
       toast({
         title: t("accessDenied"),
         description: t("onlyAdmins"),
         variant: "destructive",
       });
-      router.push("/dashboard");
-    } else if (status === "authenticated") {
+      router.push("/pages/Dashboard");
+    } else if (authStatus === "authenticated") {
       fetchCompetitions();
     }
-  }, [status, session, router, toast, t, fetchCompetitions]);
+  }, [authStatus, session, router, toast, t, fetchCompetitions]);
+
+  useEffect(() => {
+    if (debouncedJudgeSearch.trim()) {
+      fetchAvailableJudges(debouncedJudgeSearch);
+    } else {
+      setAvailableJudges([]);
+    }
+  }, [debouncedJudgeSearch]);
+
+  const fetchAvailableJudges = async (searchTerm: string) => {
+    setIsSearchingJudges(true);
+    try {
+      const res = await fetch(`/api/competitions?role=judge&search=${encodeURIComponent(searchTerm)}`);
+      if (!res.ok) throw new Error(t("failedToFetchJudges"));
+      const data = await res.json();
+      setAvailableJudges(data);
+    } catch (err) {
+      toast({
+        title: t("error"),
+        description: t("failedToFetchJudges"),
+        variant: "destructive",
+      });
+    } finally {
+      setIsSearchingJudges(false);
+    }
+  };
 
   const handleCreateCompetition = useCallback(async () => {
     if (!newCompetition.name.trim()) {
@@ -246,37 +253,12 @@ const CompetitionPage = () => {
       return;
     }
 
-    const startDate = new Date(newCompetition.startDate);
-    const endDate = new Date(newCompetition.endDate);
-
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
-      toast({
-        title: t("invalidDates"),
-        description: t("validDatesRequired"),
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (startDate > endDate) {
-      toast({
-        title: t("invalidDates"),
-        description: t("startDateBeforeEndDate"),
-        variant: "destructive",
-      });
-      return;
-    }
-
     setSubmitting(true);
     try {
       const res = await fetch("/api/competitions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...newCompetition,
-          startDate: startDate.toISOString(),
-          endDate: endDate.toISOString(),
-        }),
+        body: JSON.stringify(newCompetition),
       });
 
       if (!res.ok) {
@@ -285,15 +267,7 @@ const CompetitionPage = () => {
       }
 
       const createdCompetition = await res.json();
-      setCompetitions([
-        ...competitions,
-        {
-          ...createdCompetition,
-          _id: createdCompetition._id?.toString(),
-          startDate: new Date(createdCompetition.startDate).toISOString().split("T")[0],
-          endDate: new Date(createdCompetition.endDate).toISOString().split("T")[0],
-        },
-      ]);
+      setCompetitions([...competitions, { ...newCompetition, _id: createdCompetition.id }]);
       setActiveTab("list");
 
       toast({
@@ -311,8 +285,6 @@ const CompetitionPage = () => {
         judges: [],
         criteria: [{ id: crypto.randomUUID(), name: "", weight: 0 }],
       });
-      setNewParticipant({ name: "" });
-      setNewJudge({ name: "", email: "" });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : t("couldNotCreateCompetition");
       toast({
@@ -357,6 +329,57 @@ const CompetitionPage = () => {
     [competitions, toast, t]
   );
 
+  const addJudge = useCallback(
+    (judge: Judge) => {
+      if (newCompetition.judges.some((j) => j.id === judge.id)) {
+        toast({
+          title: t("warning"),
+          description: t("judgeAlreadyAdded"),
+          variant: "default",
+        });
+        return;
+      }
+
+      setNewCompetition((prev) => ({
+        ...prev,
+        judges: [...prev.judges, judge],
+      }));
+      setJudgeSearch("");
+      setAvailableJudges([]);
+    },
+    [newCompetition.judges, toast, t]
+  );
+
+  const removeJudge = useCallback((id: string) => {
+    setNewCompetition((prev) => ({
+      ...prev,
+      judges: prev.judges.filter((j) => j.id !== id),
+    }));
+  }, []);
+
+  const addParticipant = useCallback(() => {
+    if (!newParticipant.name.trim()) {
+      toast({
+        title: t("invalidInput"),
+        description: t("participantNameRequired"),
+        variant: "destructive",
+      });
+      return;
+    }
+    setNewCompetition((prev) => ({
+      ...prev,
+      participants: [...prev.participants, { id: crypto.randomUUID(), name: newParticipant.name.trim() }],
+    }));
+    setNewParticipant({ name: "" });
+  }, [newParticipant.name, toast, t]);
+
+  const removeParticipant = useCallback((id: string) => {
+    setNewCompetition((prev) => ({
+      ...prev,
+      participants: prev.participants.filter((p) => p.id !== id),
+    }));
+  }, []);
+
   const handleCriteriaChange = useCallback(
     (id: string, field: keyof Criterion, value: string | number) => {
       setNewCompetition((prev) => ({
@@ -378,89 +401,28 @@ const CompetitionPage = () => {
     }));
   }, []);
 
-  const removeCriteriaField = useCallback((id: string) => {
-    if (newCompetition.criteria.length <= 1) {
-      toast({
-        title: t("cannotRemove"),
-        description: t("atLeastOneCriterion"),
-        variant: "destructive",
-      });
-      return;
-    }
-    setNewCompetition((prev) => ({
-      ...prev,
-      criteria: prev.criteria.filter((criterion) => criterion.id !== id),
-    }));
-  }, [newCompetition.criteria.length, toast, t]);
+  const removeCriteriaField = useCallback(
+    (id: string) => {
+      if (newCompetition.criteria.length <= 1) {
+        toast({
+          title: t("cannotRemove"),
+          description: t("atLeastOneCriterion"),
+          variant: "destructive",
+        });
+        return;
+      }
+      setNewCompetition((prev) => ({
+        ...prev,
+        criteria: prev.criteria.filter((criterion) => criterion.id !== id),
+      }));
+    },
+    [newCompetition.criteria.length, toast, t]
+  );
 
-  const addParticipant = useCallback(() => {
-    if (!newParticipant.name.trim()) {
-      toast({
-        title: t("invalidInput"),
-        description: t("participantNameRequired"),
-        variant: "destructive",
-      });
-      return;
-    }
-    setNewCompetition((prev) => ({
-      ...prev,
-      participants: [
-        ...prev.participants,
-        { id: crypto.randomUUID(), name: newParticipant.name.trim() },
-      ],
-    }));
-    setNewParticipant({ name: "" });
-  }, [newParticipant.name, toast, t]);
-
-  const removeParticipant = useCallback((id: string) => {
-    setNewCompetition((prev) => ({
-      ...prev,
-      participants: prev.participants.filter((p) => p.id !== id),
-    }));
-  }, []);
-
-  const addJudge = useCallback(() => {
-    if (!newJudge.name.trim() || !newJudge.email.trim()) {
-      toast({
-        title: t("invalidInput"),
-        description: t("judgeNameEmailRequired"),
-        variant: "destructive",
-      });
-      return;
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newJudge.email.trim())) {
-      toast({
-        title: t("invalidInput"),
-        description: t("invalidEmail"),
-        variant: "destructive",
-      });
-      return;
-    }
-    setNewCompetition((prev) => ({
-      ...prev,
-      judges: [
-        ...prev.judges,
-        {
-          id: crypto.randomUUID(),
-          name: newJudge.name.trim(),
-          email: newJudge.email.trim(),
-        },
-      ],
-    }));
-    setNewJudge({ name: "", email: "" });
-  }, [newJudge, toast, t]);
-
-  const removeJudge = useCallback((id: string) => {
-    setNewCompetition((prev) => ({
-      ...prev,
-      judges: prev.judges.filter((j) => j.id !== id),
-    }));
-  }, []);
-
-  if (status === "loading" || loading) {
+  if (authStatus === "loading" || loading) {
     return (
       <div className="flex justify-center items-center h-screen">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-4 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
       </div>
     );
   }
@@ -468,63 +430,74 @@ const CompetitionPage = () => {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <p className="text-red-600 text-lg font-semibold mb-4">{error}</p>
-        <div className="flex space-x-4">
-          <Button
-            onClick={fetchCompetitions}
-            className="bg-blue-600 hover:bg-blue-700"
-            aria-label={t("retry")}
-          >
-            {t("retry")}
-          </Button>
-          <Button
-            onClick={() => router.push("/dashboard")}
-            variant="outline"
-            aria-label={t("backToDashboard")}
-          >
-            {t("backToDashboard")}
-          </Button>
-        </div>
+        <p className={`text-3xl font-semibold text-red-500 mb-4`}>{error}</p>
+        <Button
+          onClick={fetchCompetitions}
+          className={`px-4 py-2 text-xl bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition`}
+        >
+          {t("retry")}
+        </Button>
+        <Button
+          onClick={() => router.push("/pages/Dashboard")}
+          className={`mt-4 px-4 py-2 text-xl bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition`}
+        >
+          {t("backToDashboard")}
+        </Button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800">
+    <div
+      className={`min-h-screen transition-colors duration-300 ${
+        theme === "dark"
+          ? "bg-gradient-to-br from-gray-900 to-gray-800"
+          : "bg-gradient-to-br from-gray-50 to-blue-50"
+      }`}
+    >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between mb-8 animate-fade-in">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <h1
+              className={`text-5xl font-semibold ${
+                theme === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
               {t("competitionManagement")}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              {activeTab === "list"
-                ? t("manageExistingCompetitions")
-                : t("createNewCompetition")}
+            <p className={`text-2xl ${theme === "dark" ? "text-gray-300" : "text-gray-600"} mt-2`}>
+              {activeTab === "list" ? t("manageExistingCompetitions") : t("createNewCompetition")}
             </p>
           </div>
-          {activeTab === "create" && (
-            <Button
-              variant="outline"
-              onClick={() => setActiveTab("list")}
-              className="hover:bg-gray-200 dark:hover:bg-gray-700"
-              aria-label={t("backToList")}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              {t("backToList")}
-            </Button>
-          )}
+          <div className="flex items-center space-x-4">
+            {activeTab === "create" && (
+              <Button
+                variant="outline"
+                onClick={() => setActiveTab("list")}
+                className={`text-xl hover:shadow-lg transition ${
+                  theme === "dark" ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700" : "bg-white border-gray-200 hover:bg-gray-50"
+                }`}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {t("backToList")}
+              </Button>
+            )}
+          </div>
         </div>
 
         {activeTab === "list" ? (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              <h2
+                className={`text-4xl font-semibold ${
+                  theme === "dark" ? "text-white" : "text-gray-900"
+                }`}
+              >
                 {t("allCompetitions")}
               </h2>
               <Button
                 onClick={() => setActiveTab("create")}
-                aria-label={t("createCompetition")}
+                className={`text-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700`}
               >
                 <PlusCircle className="h-4 w-4 mr-2" />
                 {t("createCompetition")}
@@ -532,20 +505,29 @@ const CompetitionPage = () => {
             </div>
 
             {competitions.length === 0 ? (
-              <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg">
+              <Card
+                className={`backdrop-blur-sm border-0 shadow-xl hover:shadow-lg transition-all duration-300 ${
+                  theme === "dark" ? "bg-gray-800/90 border-gray-700" : "bg-white/95 border-gray-200"
+                }`}
+              >
                 <CardContent className="p-8 text-center">
                   <div className="mx-auto flex flex-col items-center justify-center">
-                    <List className="h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    <List
+                      className={`h-12 w-12 mb-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`}
+                    />
+                    <h3
+                      className={`text-3xl font-medium ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
                       {t("noCompetitionsYet")}
                     </h3>
-                    <p className="text-gray-500 dark:text-gray-400 mt-2">
+                    <p className={`text-2xl ${theme === "dark" ? "text-gray-300" : "text-gray-600"} mt-2`}>
                       {t("getStartedCreateCompetition")}
                     </p>
                     <Button
-                      className="mt-6"
+                      className={`mt-6 text-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700`}
                       onClick={() => setActiveTab("create")}
-                      aria-label={t("createCompetition")}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
                       {t("createCompetition")}
@@ -558,40 +540,52 @@ const CompetitionPage = () => {
                 {competitions.map((competition) => (
                   <Card
                     key={competition._id || crypto.randomUUID()}
-                    className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg hover:shadow-xl transition-shadow duration-300"
+                    className={`backdrop-blur-sm border-0 shadow-xl hover:shadow-lg transition-all duration-300 hover:scale-105 ${
+                      theme === "dark" ? "bg-gray-800/90 border-gray-700" : "bg-white/95 border-gray-200"
+                    }`}
                   >
                     <CardHeader>
                       <div className="flex justify-between items-start">
-                        <CardTitle className="text-lg">
-                          {t(competition.name.toLowerCase().replace(/\s/g, ""), {
-                            defaultValue: competition.name,
-                          })}
+                        <CardTitle className={`text-3xl ${theme === "dark" ? "text-white" : "text-gray-900"}`}>
+                          {competition.name}
                         </CardTitle>
                         <StatusBadge status={competition.status} t={t as TFunction} />
                       </div>
-                      <CardDescription className="line-clamp-2">
-                        {t(competition.description.toLowerCase().replace(/\s/g, ""), {
-                          defaultValue: competition.description || t("noDescription"),
-                        })}
+                      <CardDescription
+                        className={`text-xl line-clamp-2 ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}
+                      >
+                        {competition.description || t("noDescription")}
                       </CardDescription>
                     </CardHeader>
                     <CardContent>
                       <div className="space-y-3">
-                        <div className="flex items-center text-sm text-gray-600 dark:text-gray-400">
+                        <div
+                          className={`flex items-center text-xl ${
+                            theme === "dark" ? "text-gray-300" : "text-gray-600"
+                          }`}
+                        >
                           <Calendar className="h-4 w-4 mr-2" />
                           <span>
                             {new Date(competition.startDate).toLocaleDateString()} -{" "}
                             {new Date(competition.endDate).toLocaleDateString()}
                           </span>
                         </div>
-                        <div className="flex space-x-4 text-sm">
-                          <div className="flex items-center">
+                        <div className="flex space-x-4 text-xl">
+                          <div
+                            className={`flex items-center ${
+                              theme === "dark" ? "text-gray-300" : "text-gray-600"
+                            }`}
+                          >
                             <User className="h-4 w-4 mr-2" />
                             <span>
                               {competition.participants.length} {t("participants")}
                             </span>
                           </div>
-                          <div className="flex items-center">
+                          <div
+                            className={`flex items-center ${
+                              theme === "dark" ? "text-gray-300" : "text-gray-600"
+                            }`}
+                          >
                             <Award className="h-4 w-4 mr-2" />
                             <span>
                               {competition.judges.length} {t("judges")}
@@ -601,11 +595,12 @@ const CompetitionPage = () => {
                         <div className="pt-2 flex space-x-2">
                           <Button
                             variant="outline"
-                            className="flex-1"
-                            onClick={() =>
-                              router.push(`/pages/Competition/${competition._id}`)
-                            }
-                            aria-label={t("viewDetails")}
+                            className={`flex-1 text-xl ${
+                              theme === "dark"
+                                ? "bg-gray-700/20 border-gray-600 hover:bg-gray-700 text-gray-300"
+                                : "bg-white border-gray-200 hover:bg-gray-50 text-gray-600"
+                            }`}
+                            onClick={() => router.push(`/pages/Competition/${competition._id}`)}
                           >
                             {t("viewDetails")}
                           </Button>
@@ -613,11 +608,13 @@ const CompetitionPage = () => {
                             variant="destructive"
                             size="icon"
                             onClick={() => handleDeleteCompetition(competition._id!)}
-                            title={t("deleteCompetition")}
                             disabled={!competition._id}
-                            aria-label={t("deleteCompetition")}
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2
+                              className={`h-4 w-4 ${
+                                theme === "dark" ? "border-white text-white" : "border-black text-black"
+                              }`}
+                            />
                           </Button>
                         </div>
                       </div>
@@ -629,21 +626,29 @@ const CompetitionPage = () => {
           </div>
         ) : (
           <div className="space-y-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            <h2
+              className={`text-4xl font-semibold ${
+                theme === "dark" ? "text-white" : "text-gray-900"
+              }`}
+            >
               {t("createNewCompetition")}
             </h2>
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-lg">
+            <Card
+              className={`backdrop-blur-sm border-0 shadow-xl hover:shadow-lg transition-all duration-300 ${
+                theme === "dark" ? "bg-gray-800/90 border-gray-700" : "bg-white/95 border-gray-200"
+              }`}
+            >
               <CardContent className="p-6 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label
-                      htmlFor="competition-name"
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className={`text-xl font-medium ${
+                        theme === "dark" ? "text-gray-300" : "text-gray-700"
+                      }`}
                     >
                       {t("competitionName")}
                     </label>
                     <Input
-                      id="competition-name"
                       placeholder={t("enterCompetitionName")}
                       value={newCompetition.name}
                       onChange={(e) =>
@@ -651,18 +656,18 @@ const CompetitionPage = () => {
                       }
                       required
                       disabled={submitting}
-                      aria-required="true"
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                     />
                   </div>
                   <div className="space-y-2">
                     <label
-                      htmlFor="competition-status"
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className={`text-xl font-medium ${
+                        theme === "dark" ? "text-gray-300" : "text-gray-700"
+                      }`}
                     >
                       {t("status")}
                     </label>
                     <select
-                      id="competition-status"
                       value={newCompetition.status}
                       onChange={(e) =>
                         setNewCompetition({
@@ -670,10 +675,11 @@ const CompetitionPage = () => {
                           status: e.target.value as Competition["status"],
                         })
                       }
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      className={`text-xl flex h-10 w-full rounded-md border px-3 py-2 placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"
+                      }`}
                       required
                       disabled={submitting}
-                      aria-required="true"
                     >
                       <option value="Upcoming">{t("upcoming")}</option>
                       <option value="Ongoing">{t("live")}</option>
@@ -683,13 +689,13 @@ const CompetitionPage = () => {
                 </div>
                 <div className="space-y-2">
                   <label
-                    htmlFor="competition-description"
-                    className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                    className={`text-xl font-medium ${
+                      theme === "dark" ? "text-gray-300" : "text-gray-700"
+                    }`}
                   >
                     {t("description")}
                   </label>
                   <Textarea
-                    id="competition-description"
                     placeholder={t("enterDescription")}
                     value={newCompetition.description}
                     onChange={(e) =>
@@ -700,18 +706,19 @@ const CompetitionPage = () => {
                     }
                     rows={3}
                     disabled={submitting}
+                    className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2">
                     <label
-                      htmlFor="start-date"
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className={`text-xl font-medium ${
+                        theme === "dark" ? "text-gray-300" : "text-gray-700"
+                      }`}
                     >
                       {t("startDate")}
                     </label>
                     <Input
-                      id="start-date"
                       type="date"
                       value={newCompetition.startDate}
                       onChange={(e) =>
@@ -722,18 +729,18 @@ const CompetitionPage = () => {
                       }
                       required
                       disabled={submitting}
-                      aria-required="true"
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                     />
                   </div>
                   <div className="space-y-2">
                     <label
-                      htmlFor="end-date"
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                      className={`text-xl font-medium ${
+                        theme === "dark" ? "text-gray-300" : "text-gray-700"
+                      }`}
                     >
                       {t("endDate")}
                     </label>
                     <Input
-                      id="end-date"
                       type="date"
                       value={newCompetition.endDate}
                       onChange={(e) =>
@@ -744,13 +751,17 @@ const CompetitionPage = () => {
                       }
                       required
                       disabled={submitting}
-                      aria-required="true"
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                     />
                   </div>
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    <h3
+                      className={`text-3xl font-medium ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
                       {t("participants")}
                     </h3>
                     <Button
@@ -758,7 +769,7 @@ const CompetitionPage = () => {
                       size="sm"
                       onClick={addParticipant}
                       disabled={submitting}
-                      aria-label={t("addParticipant")}
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700" : "bg-white border-gray-200 hover:bg-gray-50"}`}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
                       {t("addParticipant")}
@@ -770,21 +781,25 @@ const CompetitionPage = () => {
                       value={newParticipant.name}
                       onChange={(e) => setNewParticipant({ name: e.target.value })}
                       disabled={submitting}
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                     />
                     {newCompetition.participants.length > 0 && (
                       <div className="space-y-2">
                         {newCompetition.participants.map((p) => (
                           <div
                             key={p.id}
-                            className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                            className={`flex items-center justify-between p-2 rounded ${
+                              theme === "dark" ? "bg-gray-700/80" : "bg-gray-100"
+                            }`}
                           >
-                            <span className="text-sm">{p.name}</span>
+                            <span className={`text-xl ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}>
+                              {p.name}
+                            </span>
                             <Button
                               variant="destructive"
                               size="icon"
                               onClick={() => removeParticipant(p.id)}
                               disabled={submitting}
-                              aria-label={t("removeParticipant", { name: p.name })}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -796,50 +811,97 @@ const CompetitionPage = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    <h3
+                      className={`text-3xl font-medium ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
                       {t("judges")}
                     </h3>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addJudge}
-                      disabled={submitting}
-                      aria-label={t("addJudge")}
-                    >
-                      <PlusCircle className="h-4 w-4 mr-2" />
-                      {t("addJudge")}
-                    </Button>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input
-                      placeholder={t("enterJudgeName")}
-                      value={newJudge.name}
-                      onChange={(e) => setNewJudge({ ...newJudge, name: e.target.value })}
-                      disabled={submitting}
-                    />
-                    <Input
-                      placeholder={t("enterJudgeEmail")}
-                      value={newJudge.email}
-                      onChange={(e) => setNewJudge({ ...newJudge, email: e.target.value })}
-                      disabled={submitting}
-                    />
+                  <div className="relative">
+                    <div className="flex items-center border rounded-md overflow-hidden">
+                      <Search className={`h-4 w-4 mx-3 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
+                      <Input
+                        placeholder={t("searchJudges")}
+                        value={judgeSearch}
+                        onChange={(e) => setJudgeSearch(e.target.value)}
+                        disabled={submitting}
+                        className={`text-xl border-0 focus-visible:ring-0 ${
+                          theme === "dark" ? "bg-gray-700/80 text-white" : "bg-white text-gray-900"
+                        }`}
+                      />
+                    </div>
+
+                    {isSearchingJudges && (
+                      <div
+                        className={`absolute z-10 w-full mt-1 shadow-lg rounded-md p-2 ${
+                          theme === "dark" ? "bg-gray-800" : "bg-white"
+                        }`}
+                      >
+                        <div className="text-center py-2 text-xl">{t("searching")}...</div>
+                      </div>
+                    )}
+
+                    {availableJudges.length > 0 && !isSearchingJudges && (
+                      <div
+                        className={`absolute z-10 w-full mt-1 shadow-lg rounded-md max-h-60 overflow-auto ${
+                          theme === "dark" ? "bg-gray-800" : "bg-white"
+                        }`}
+                      >
+                        {availableJudges.map((judge) => (
+                          <div
+                            key={judge.id}
+                            className={`p-2 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer flex justify-between items-center`}
+                            onClick={() => addJudge(judge)}
+                          >
+                            <div>
+                              <p
+                                className={`text-xl font-medium ${
+                                  theme === "dark" ? "text-white" : "text-gray-900"
+                                }`}
+                              >
+                                {judge.name}
+                              </p>
+                              <p className={`text-lg ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>{judge.email}</p>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className={`text-xl ${theme === "dark" ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700" : "bg-white border-gray-200 hover:bg-gray-50"}`}
+                            >
+                              {t("add")}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
                   {newCompetition.judges.length > 0 && (
                     <div className="space-y-2">
-                      {newCompetition.judges.map((j) => (
+                      {newCompetition.judges.map((judge) => (
                         <div
-                          key={j.id}
-                          className="flex items-center justify-between bg-gray-100 dark:bg-gray-700 p-2 rounded"
+                          key={judge.id}
+                          className={`flex items-center justify-between p-2 rounded ${
+                            theme === "dark" ? "bg-gray-700/80" : "bg-gray-100"
+                          }`}
                         >
-                          <span className="text-sm">
-                            {j.name} ({j.email})
-                          </span>
+                          <div>
+                            <p
+                              className={`text-xl font-medium ${
+                                theme === "dark" ? "text-white" : "text-gray-900"
+                              }`}
+                            >
+                              {judge.name}
+                            </p>
+                            <p className={`text-lg ${theme === "dark" ? "text-gray-400" : "text-gray-600"}`}>{judge.email}</p>
+                          </div>
                           <Button
                             variant="destructive"
                             size="icon"
-                            onClick={() => removeJudge(j.id)}
+                            onClick={() => removeJudge(judge.id)}
                             disabled={submitting}
-                            aria-label={t("removeJudge", { name: j.name })}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -850,7 +912,11 @@ const CompetitionPage = () => {
                 </div>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-white">
+                    <h3
+                      className={`text-3xl font-medium ${
+                        theme === "dark" ? "text-white" : "text-gray-900"
+                      }`}
+                    >
                       {t("judgingCriteria")}
                     </h3>
                     <Button
@@ -858,7 +924,7 @@ const CompetitionPage = () => {
                       size="sm"
                       onClick={addCriteriaField}
                       disabled={submitting}
-                      aria-label={t("addCriteria")}
+                      className={`text-xl ${theme === "dark" ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700" : "bg-white border-gray-200 hover:bg-gray-50"}`}
                     >
                       <PlusCircle className="h-4 w-4 mr-2" />
                       {t("addCriteria")}
@@ -866,52 +932,45 @@ const CompetitionPage = () => {
                   </div>
                   <div className="space-y-4">
                     {newCompetition.criteria.map((criterion) => (
-                      <div
-                        key={criterion.id}
-                        className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end"
-                      >
+                      <div key={criterion.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
                         <div className="md:col-span-5 space-y-2">
                           <label
-                            htmlFor={`criterion-name-${criterion.id}`}
-                            className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                            className={`text-xl font-medium ${
+                              theme === "dark" ? "text-gray-300" : "text-gray-700"
+                            }`}
                           >
                             {t("criterionName")}
                           </label>
                           <Input
-                            id={`criterion-name-${criterion.id}`}
                             placeholder={t("enterCriterionName")}
                             value={criterion.name}
-                            onChange={(e) =>
-                              handleCriteriaChange(criterion.id, "name", e.target.value)
-                            }
+                            onChange={(e) => handleCriteriaChange(criterion.id, "name", e.target.value)}
                             required
                             disabled={submitting}
-                            aria-required="true"
+                            className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                           />
                         </div>
                         <div className="md:col-span-5 space-y-2">
                           <label
-                            htmlFor={`criterion-weight-${criterion.id}`}
-                            className="text-sm font-medium text-gray-700 dark:text-gray-300"
+                            className={`text-xl font-medium ${
+                              theme === "dark" ? "text-gray-300" : "text-gray-700"
+                            }`}
                           >
                             {t("weight")}
                           </label>
                           <div className="flex items-center space-x-2">
                             <Input
-                              id={`criterion-weight-${criterion.id}`}
                               type="number"
                               min="1"
                               max="100"
                               placeholder="0-100"
                               value={criterion.weight}
-                              onChange={(e) =>
-                                handleCriteriaChange(criterion.id, "weight", e.target.value)
-                              }
+                              onChange={(e) => handleCriteriaChange(criterion.id, "weight", e.target.value)}
                               required
                               disabled={submitting}
-                              aria-required="true"
+                              className={`text-xl ${theme === "dark" ? "bg-gray-700/80 text-white border-gray-600" : "bg-white text-gray-900 border-gray-200"}`}
                             />
-                            <Percent className="h-4 w-4 text-gray-500" />
+                            <Percent className={`h-4 w-4 ${theme === "dark" ? "text-gray-400" : "text-gray-500"}`} />
                           </div>
                         </div>
                         <div className="md:col-span-2 flex justify-end">
@@ -920,7 +979,6 @@ const CompetitionPage = () => {
                             size="icon"
                             onClick={() => removeCriteriaField(criterion.id)}
                             disabled={submitting}
-                            aria-label={t("removeCriterion", { name: criterion.name })}
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
@@ -930,18 +988,15 @@ const CompetitionPage = () => {
                   </div>
                   <div className="pt-2">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">
+                      <span
+                        className={`text-xl ${theme === "dark" ? "text-gray-300" : "text-gray-600"}`}
+                      >
                         {t("totalWeight", {
-                          value: newCompetition.criteria
-                            .reduce((sum, c) => sum + Number(c.weight), 0)
-                            .toString(),
+                          value: newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0).toString(),
                         })}
                       </span>
-                      {newCompetition.criteria.reduce(
-                        (sum, c) => sum + Number(c.weight),
-                        0
-                      ) !== 100 && (
-                        <span className="text-sm text-red-600">{t("totalMustBe100")}</span>
+                      {newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0) !== 100 && (
+                        <span className="text-xl text-red-600">{t("totalMustBe100")}</span>
                       )}
                     </div>
                   </div>
@@ -955,13 +1010,9 @@ const CompetitionPage = () => {
                       !newCompetition.startDate ||
                       !newCompetition.endDate ||
                       newCompetition.criteria.some((c) => !c.name.trim() || c.weight <= 0) ||
-                      newCompetition.criteria.reduce(
-                        (sum, c) => sum + Number(c.weight),
-                        0
-                      ) !== 100
+                      newCompetition.criteria.reduce((sum, c) => sum + Number(c.weight), 0) !== 100
                     }
-                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-                    aria-label={t("createCompetition")}
+                    className={`text-xl bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700`}
                   >
                     {submitting ? t("creating") : t("createCompetition")}
                   </Button>
@@ -973,6 +1024,12 @@ const CompetitionPage = () => {
       </div>
     </div>
   );
-};
+}
 
-export default CompetitionPage;
+export default function CompetitionPage() {
+  return (
+    <Suspense fallback={<div className="text-2xl">Loading...</div>}>
+      <CompetitionContent />
+    </Suspense>
+  );
+}

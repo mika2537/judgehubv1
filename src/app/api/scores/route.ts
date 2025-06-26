@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { MongoClient, ObjectId } from "mongodb";
 
-const uri = process.env.MONGODB_URI;
+const uri = process.env.MONGODB_URI as string;
 
-let client: MongoClient | null = null;
+let client: MongoClient;
 let clientPromise: Promise<MongoClient>;
 
 if (!uri) {
   throw new Error("MONGODB_URI environment variable is not set");
 }
 
-if (!client) {
+if (!global._mongoClientPromise) {
   client = new MongoClient(uri);
-  clientPromise = client.connect();
+  global._mongoClientPromise = client.connect();
 }
+clientPromise = global._mongoClientPromise;
 
 interface ScoreInput {
   criterionId: string;
@@ -30,157 +31,210 @@ interface Criterion {
 interface Competition {
   _id: ObjectId;
   criteria: Criterion[];
-  // You can add other fields here if needed
+  participants: { id: string; name: string; performance?: string }[];
+  judges: { id: string; name: string; email: string }[];
+  scoredParticipantIds?: string[];
 }
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
+    console.log("Received request body:", body);
+
     const {
       competitionId,
       participantId,
       scores,
       judgeId,
-      createdAt,
+      createdAt = new Date().toISOString(),
     }: {
       competitionId: string;
       participantId: string;
-      scores: ScoreInput[];
+      scores?: ScoreInput[];
       judgeId: string;
-      createdAt: string;
+      createdAt?: string;
     } = body;
 
-    if (
-      !competitionId ||
-      !participantId ||
-      !judgeId ||
-      !Array.isArray(scores)
-    ) {
+    if (!competitionId || !participantId || !judgeId) {
       return NextResponse.json(
-        { error: "Missing required fields" },
+        {
+          error:
+            "Missing required fields: competitionId, participantId, judgeId",
+        },
         { status: 400 }
       );
     }
 
-    if (
-      !ObjectId.isValid(competitionId) ||
-      !ObjectId.isValid(participantId) ||
-      !ObjectId.isValid(judgeId)
-    ) {
+    let competitionObjectId;
+    try {
+      competitionObjectId = new ObjectId(competitionId);
+    } catch (e) {
       return NextResponse.json(
-        { error: "Invalid ID format" },
+        { error: "Invalid competitionId format" },
         { status: 400 }
       );
     }
 
-    await clientPromise;
-    if (!client) {
-      throw new Error("MongoClient is not initialized");
-    }
-
+    const client = await clientPromise;
     const db = client.db("judgehub");
 
-    // Fetch competition
-    const competition = (await db
-      .collection("events")
-      .findOne({ _id: new ObjectId(competitionId) })) as Competition | null;
+    const competition = await db
+      .collection("competitions")
+      .findOne<Competition>({ _id: competitionObjectId });
 
     if (!competition) {
       return NextResponse.json(
-        { error: "Competition not found" },
+        { error: `Competition not found: ${competitionId}` },
         { status: 404 }
       );
     }
 
-    if (!Array.isArray(competition.criteria)) {
+    if (!competition.participants.some((p) => p.id === participantId)) {
       return NextResponse.json(
-        { error: "Invalid competition criteria" },
+        { error: `Participant not found in competition: ${participantId}` },
         { status: 400 }
       );
     }
 
-    // Validate scores cover all criteria
-    const criteriaIds = new Set(competition.criteria.map((c) => c.id));
-    const receivedCriteriaIds = new Set(scores.map((s) => s.criterionId));
-    if (
-      criteriaIds.size !== receivedCriteriaIds.size ||
-      ![...criteriaIds].every((id) => receivedCriteriaIds.has(id))
-    ) {
+    if (!competition.judges.some((j) => j.id === judgeId)) {
       return NextResponse.json(
-        { error: "Scores must cover all criteria" },
+        { error: `Judge not authorized for competition: ${judgeId}` },
+        { status: 403 }
+      );
+    }
+
+    if (!scores) {
+      const existingScores = await db.collection("scoreboard").findOne({
+        competitionId: competitionObjectId,
+        participantId,
+        judgeId,
+      });
+
+      return NextResponse.json(
+        {
+          scores: existingScores
+            ? existingScores.scores.map((s: any) => ({
+                criterionId: s.criterionId,
+                score: s.score,
+                comment: s.comment || "",
+              }))
+            : [],
+        },
+        { status: 200 }
+      );
+    }
+
+    if (!competition.criteria || !Array.isArray(competition.criteria)) {
+      return NextResponse.json(
+        { error: "Competition criteria not properly configured" },
+        { status: 400 }
+      );
+    }
+
+    const competitionCriteriaIds = new Set(
+      competition.criteria.map((c) => c.id)
+    );
+    const submittedCriteriaIds = new Set(scores.map((s) => s.criterionId));
+
+    const missingCriteria = [...competitionCriteriaIds].filter(
+      (id) => !submittedCriteriaIds.has(id)
+    );
+
+    if (missingCriteria.length > 0) {
+      return NextResponse.json(
+        { error: "Missing scores for some criteria", missingCriteria },
         { status: 400 }
       );
     }
 
     for (const score of scores) {
-      if (
-        typeof score.score !== "number" ||
-        score.score < 1 ||
-        score.score > 10
-      ) {
+      if (typeof score.score !== "number" || isNaN(score.score)) {
         return NextResponse.json(
-          { error: "Scores must be numbers between 1 and 10" },
+          { error: `Invalid score for criterion ${score.criterionId}` },
+          { status: 400 }
+        );
+      }
+      if (score.score < 0 || score.score > 10) {
+        return NextResponse.json(
+          {
+            error: `Score must be between 0 and 10 for criterion ${score.criterionId}`,
+          },
+          { status: 400 }
+        );
+      }
+      if (!competitionCriteriaIds.has(score.criterionId)) {
+        return NextResponse.json(
+          { error: `Invalid criterionId: ${score.criterionId}` },
           { status: 400 }
         );
       }
     }
 
-    // Calculate total score
-    const totalScore = scores.reduce((total: number, score: ScoreInput) => {
-      const criterion = competition.criteria.find(
-        (c) => c.id === score.criterionId
-      );
-      if (!criterion) return total;
-      return total + (score.score * criterion.weight) / 100;
-    }, 0);
+    const totalScore = scores.reduce((sum, score) => sum + score.score, 0);
 
-    // Check if judge already scored
     const existingScore = await db.collection("scoreboard").findOne({
-      competitionId: new ObjectId(competitionId),
+      competitionId: competitionObjectId,
       participantId,
-      judgeId: new ObjectId(judgeId),
+      judgeId,
     });
 
     if (existingScore) {
       return NextResponse.json(
-        { error: "Participant already scored by this judge" },
-        { status: 400 }
+        {
+          error: "Judge has already scored this participant",
+          existingScoreId: existingScore._id,
+        },
+        { status: 409 }
       );
     }
 
-    // Insert new score
-    const scoreEntry = {
-      competitionId: new ObjectId(competitionId),
+    const scoreDoc = {
+      competitionId: competitionObjectId,
       participantId,
-      judgeId: new ObjectId(judgeId),
-      scores: scores.map((s: ScoreInput) => ({
-        criterionId: s.criterionId,
-        score: s.score,
-        comment: s.comment || "",
+      scores: scores.map((score) => ({
+        criterionId: score.criterionId,
+        score: score.score,
+        comment: score.comment || "",
       })),
       totalScore,
+      judgeId,
       createdAt: new Date(createdAt),
+      updatedAt: new Date(),
     };
 
-    await db.collection("scoreboard").insertOne(scoreEntry);
+    const result = await db.collection("scoreboard").insertOne(scoreDoc);
 
-    // Update participant as scored
-    await db.collection("events").updateOne(
-      { _id: new ObjectId(competitionId) },
-      { $addToSet: { scoredParticipantIds: participantId } }
-    );
+    await db
+      .collection("competitions")
+      .updateOne(
+        { _id: competitionObjectId },
+        { $addToSet: { scoredParticipantIds: participantId } }
+      );
 
     return NextResponse.json(
-      { message: "Scores submitted successfully" },
-      { status: 200 }
+      {
+        message: "Scores submitted successfully",
+        data: {
+          _id: result.insertedId,
+          ...scoreDoc,
+          competitionId: competitionId,
+          judgeId: judgeId,
+        },
+      },
+      { status: 201 }
     );
   } catch (error) {
-    console.error("MongoDB error:", error);
+    console.error("Error in POST /api/scores:", error);
     return NextResponse.json(
-      { error: "Failed to submit scores" },
+      {
+        error: "Internal server error",
+        message: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 }
     );
   }
 }
 
-export const dynamic = "force-dynamic";
+declare global {
+  var _mongoClientPromise: Promise<MongoClient> | undefined;
+}

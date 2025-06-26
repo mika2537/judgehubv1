@@ -1,4 +1,3 @@
-// src/app/page.tsx
 'use client';
 
 import { useSession } from 'next-auth/react';
@@ -14,8 +13,8 @@ import { Button } from '@/app/components/ui/button';
 import { Trophy, Users, Star, BarChart3, Calendar, Clock } from 'lucide-react';
 import Link from 'next/link';
 import { useLanguage } from '@/context/languageContext';
+import { useTheme } from '@/app/components/ThemeProvider';
 
-// Extend Session type to include role
 declare module 'next-auth' {
   interface Session {
     user: {
@@ -26,7 +25,6 @@ declare module 'next-auth' {
   }
 }
 
-// API item type
 interface CompetitionApiItem {
   _id?: string;
   name?: string;
@@ -40,7 +38,6 @@ interface CompetitionApiItem {
   endDate?: string;
 }
 
-// Competition type
 type Competition = {
   id: string;
   name: string;
@@ -59,6 +56,7 @@ function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { t } = useLanguage();
+  const { theme } = useTheme();
 
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,33 +73,25 @@ function DashboardContent() {
         throw new Error(`Failed to fetch competitions: ${response.status}`);
       }
       const data = await response.json();
-      const formattedData: Competition[] = data
-        .map((item: CompetitionApiItem) => ({
-          id: item._id?.toString() || Math.random().toString(36).substring(2, 9),
-          name:
-            item.name ||
-            (item.teamA && item.teamB
-              ? `${item.teamA} vs ${item.teamB}`
-              : t('unnamedCompetition')),
-          teamA: item.teamA,
-          teamB: item.teamB,
-          scoreA: item.scoreA ?? null,
-          scoreB: item.scoreB ?? null,
-          status: item.status || t('upcoming'),
-          participants: Array.isArray(item.participants)
-            ? item.participants.length
-            : 0,
-          judges: Array.isArray(item.judges) ? item.judges.length : 0,
-          endDate: item.endDate
-            ? new Date(item.endDate).toLocaleDateString('en-US', {
-                year: 'numeric',
-                month: 'short',
-                day: 'numeric',
-                timeZone: 'Asia/Shanghai',
-              })
-            : t('notAvailable'),
-        }))
-        .filter((comp: Competition) => comp.participants >= 3 && comp.judges >= 3);
+      const formattedData: Competition[] = data.map((item: CompetitionApiItem) => ({
+        id: item._id?.toString() || Math.random().toString(36).substring(2, 9),
+        name: item.name || (item.teamA && item.teamB ? `${item.teamA} vs ${item.teamB}` : t('unnamedCompetition')),
+        teamA: item.teamA,
+        teamB: item.teamB,
+        scoreA: item.scoreA ?? null,
+        scoreB: item.scoreB ?? null,
+        status: item.status || t('upcoming'),
+        participants: Array.isArray(item.participants) ? item.participants.length : 0,
+        judges: Array.isArray(item.judges) ? item.judges.length : 0,
+        endDate: item.endDate
+          ? new Date(item.endDate).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'short',
+              day: 'numeric',
+              timeZone: 'Asia/Shanghai',
+            })
+          : t('notAvailable'),
+      }));
       setCompetitions(formattedData);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('unknownError'));
@@ -137,19 +127,19 @@ function DashboardContent() {
       title: t('activeCompetitions'),
       value: competitions.length.toString(),
       icon: Trophy,
-      color: 'text-blue-600',
+      color: 'text-blue-600 dark:text-blue-400',
     },
     {
       title: t('totalJudges'),
       value: totalJudges.toString(),
       icon: Users,
-      color: 'text-green-600',
+      color: 'text-green-600 dark:text-green-400',
     },
     {
       title: t('submissionsToday'),
       value: submissionsToday.toString(),
       icon: Star,
-      color: 'text-purple-600',
+      color: 'text-purple-600 dark:text-purple-400',
     },
     {
       title: t('averageScore'),
@@ -158,13 +148,11 @@ function DashboardContent() {
             competitions
               .filter((c) => c.scoreA != null && c.scoreB != null)
               .reduce((sum, c) => sum + (c.scoreA! + c.scoreB!), 0) /
-            (competitions.filter((c) => c.scoreA != null && c.scoreB != null)
-              .length *
-              2 || 1)
+            (competitions.filter((c) => c.scoreA != null && c.scoreB != null).length * 2 || 1)
           ).toFixed(1)
         : '0.0',
       icon: BarChart3,
-      color: 'text-orange-600',
+      color: 'text-orange-600 dark:text-orange-400',
     },
   ];
 
@@ -194,10 +182,10 @@ function DashboardContent() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <p className="text-red-500 text-lg font-semibold mb-4">{error}</p>
+        <p className="text-red-500 text-2xl font-semibold mb-4">{error}</p>
         <Button
           onClick={fetchCompetitions}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
+          className="px-4 py-2 bg-blue-600 text-white text-xl rounded-lg hover:bg-blue-700 transition"
         >
           {t('retry')}
         </Button>
@@ -206,13 +194,21 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50 dark:from-gray-900 dark:to-gray-800 transition-colors duration-300">
+    <div className={`min-h-screen transition-colors duration-300 ${
+      theme === 'dark' 
+        ? 'bg-gradient-to-br from-gray-900 to-gray-800' 
+        : 'bg-gradient-to-br from-gray-50 to-blue-50'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8 animate-fade-in">
-          <h1 className="text-3xl font-semibold">
+          <h1 className={`text-5xl font-semibold ${
+            theme === 'dark' ? 'text-white' : 'text-gray-900'
+          }`}>
             {t('welcome', { name: session?.user?.name || t('user') })}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">{t('dashboardSubtitle')}</p>
+          <p className={theme === 'dark' ? 'text-gray-300 text-xl' : 'text-gray-600 text-xl'}>
+            {t('dashboardSubtitle')}
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -221,22 +217,34 @@ function DashboardContent() {
             return (
               <Card
                 key={index}
-                className="hover:shadow-lg transition-all duration-300 hover:scale-105 bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl"
+                className={`hover:shadow-lg transition-all duration-300 hover:scale-105 backdrop-blur-sm border-0 shadow-xl ${
+                  theme === 'dark' 
+                    ? 'bg-gray-800/90 border-gray-700' 
+                    : 'bg-white/95 border-gray-200'
+                }`}
               >
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      <p className={`text-lg font-medium ${
+                        theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                      }`}>
                         {stat.title}
                       </p>
-                      <p className="text-3xl font-bold text-gray-900 dark:text-white">
+                      <p className={`text-4xl font-bold ${
+                        theme === 'dark' ? 'text-white' : 'text-gray-900'
+                      }`}>
                         {stat.value}
                       </p>
                     </div>
                     <div
-                      className={`p-3 rounded-lg bg-gray-50 dark:bg-gray-700 ${stat.color}`}
+                      className={`p-3 rounded-lg ${
+                        theme === 'dark' 
+                          ? 'bg-gray-700/80' 
+                          : 'bg-gray-100'
+                      } ${stat.color}`}
                     >
-                      <Icon className="h-6 w-6" />
+                      <Icon className="h-8 w-8" />
                     </div>
                   </div>
                 </CardContent>
@@ -247,37 +255,53 @@ function DashboardContent() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <div className="lg:col-span-2">
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl">
+            <Card className={`backdrop-blur-sm border-0 shadow-xl ${
+              theme === 'dark' 
+                ? 'bg-gray-800/90 border-gray-700' 
+                : 'bg-white/95 border-gray-200'
+            }`}>
               <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Calendar className="w-5 h-5 text-blue-500" />
+                <CardTitle className={`flex items-center space-x-2 ${
+                  theme === 'dark' ? 'text-white' : 'text-gray-900'
+                } text-3xl`}>
+                  <Calendar className="w-6 h-6 text-blue-500" />
                   <span>{t('activeCompetitions')}</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 {competitions.length === 0 ? (
-                  <p className="text-gray-600 dark:text-gray-400">{t('noCompetitions')}</p>
+                  <p className={theme === 'dark' ? 'text-gray-300 text-xl' : 'text-gray-600 text-xl'}>
+                    {t('noCompetitions')}
+                  </p>
                 ) : (
                   <div className="space-y-4">
                     {competitions.map((competition) => (
                       <Link
-                        href={`/pages/Scoreboard`}
+                        href={`/pages/Scoreboard?id=${competition.id}`}
                         key={competition.id}
-                        className="block p-4 border rounded-lg hover:bg-blue-50 dark:hover:bg-gray-700 transition"
+                        className={`block p-4 rounded-lg shadow-md transition ${
+                          theme === 'dark' 
+                            ? 'bg-gray-700/80 border-gray-600 hover:bg-gray-700' 
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                        }`}
                       >
-                        <div className="flex justify-between items-center">
-                          <h3 className="font-semibold text-lg text-gray-900 dark:text-white">
+                        <div className="flex justify-between items-center mb-1">
+                          <h3 className={`font-semibold text-2xl ${
+                            theme === 'dark' ? 'text-white' : 'text-gray-900'
+                          }`}>
                             {competition.name}
                           </h3>
                           <span
-                            className={`inline-block px-2 py-1 text-xs font-semibold rounded ${getStatusColor(
+                            className={`inline-block px-2 py-1 text-base font-semibold rounded ${getStatusColor(
                               competition.status
                             )}`}
                           >
                             {competition.status}
                           </span>
                         </div>
-                        <p className="text-gray-600 dark:text-gray-400 mt-1">
+                        <p className={`text-lg ${
+                          theme === 'dark' ? 'text-gray-300' : 'text-gray-600'
+                        }`}>
                           {t('participants')}: {competition.participants} | {t('judges')}: {competition.judges} | {t('ends')}: {competition.endDate}
                         </p>
                       </Link>
@@ -289,9 +313,17 @@ function DashboardContent() {
           </div>
 
           <div>
-            <Card className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-sm border-0 shadow-xl p-6 flex flex-col items-center justify-center">
-              <Clock className="w-12 h-12 text-gray-500 dark:text-gray-400 mb-4 animate-pulse" />
-              <p className="text-gray-700 dark:text-gray-300">{t('comingSoon')}</p>
+            <Card className={`backdrop-blur-sm border-0 shadow-xl p-6 flex flex-col items-center justify-center ${
+              theme === 'dark' 
+                ? 'bg-gray-800/90 border-gray-700' 
+                : 'bg-white/95 border-gray-200'
+            }`}>
+              <Clock className={`w-14 h-14 mb-4 animate-pulse ${
+                theme === 'dark' ? 'text-gray-400' : 'text-gray-500'
+              }`} />
+              <p className={theme === 'dark' ? 'text-gray-300 text-xl' : 'text-gray-600 text-xl'}>
+                {t('comingSoon')}
+              </p>
             </Card>
           </div>
         </div>
@@ -302,7 +334,7 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense fallback={<div className="text-xl">Loading...</div>}>
       <DashboardContent />
     </Suspense>
   );

@@ -1,29 +1,16 @@
-import { connectToDb } from "@/lib/mongodb";
+import {connectToDb } from "@/lib/mongodb";
 import { NextResponse } from "next/server";
-import { ObjectId, Collection } from "mongodb";
-
-interface Competition {
-  _id: ObjectId;
-  name: string;
-  status?: string;
-  startDate?: string;
-  endDate?: string;
-  participants?: unknown[];
-  [key: string]: unknown;
-}
 
 export async function GET() {
   try {
     const { db } = await connectToDb();
+    const matches: { _id: any; [key: string]: any }[] = await db.collection("competitions").find().toArray();
 
-    const competitionCollection: Collection<Competition> = db.collection("competitions");
-
-    const matches = await competitionCollection.find().toArray();
-
+    // Convert MongoDB _id to string for serialization
     const serializedMatches = matches.map((match) => ({
       ...match,
       _id: match._id.toString(),
-      id: match._id.toString(),
+      id: match._id.toString(), // Add both _id and id for compatibility
     }));
 
     return NextResponse.json(serializedMatches);
