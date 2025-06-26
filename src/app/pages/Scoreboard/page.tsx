@@ -18,7 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { Trophy, Moon, Sun, Star, TrendingUp, Users, RefreshCw, ArrowLeft, Medal, ArrowUp, ArrowDown } from "lucide-react";
+import { Trophy, Star, TrendingUp, Users, RefreshCw, ArrowLeft, Medal, ArrowUp, ArrowDown } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
 import { useLanguage } from "@/context/languageContext";
 import { useTheme } from "@/app/components/ThemeProvider";
@@ -66,11 +66,11 @@ interface Competition {
 }
 
 function ScoreboardContent() {
-  const { data: session, status } = useSession();
+  const { status: authStatus } = useSession();
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [selectedCompetition, setSelectedCompetition] = useState<string | null>(null);
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [leaderboard, setLeaderboard] = useState<ScoreboardEntry[]>([]);
@@ -107,6 +107,15 @@ function ScoreboardContent() {
     }
   }, [t, toast, selectedCompetition]);
 
+  useEffect(() => {
+    if (authStatus === "unauthenticated") {
+      sessionStorage.setItem("loginRedirect", "/pages/Scoreboard");
+      router.push("/pages/login");
+    } else if (authStatus === "authenticated") {
+      fetchCompetitions();
+    }
+  }, [authStatus, router, fetchCompetitions]);
+
   // Update leaderboard and track rank changes
   useEffect(() => {
     if (!selectedCompetition) {
@@ -138,15 +147,6 @@ function ScoreboardContent() {
       console.warn(`No scoreboard data for competition ${selectedCompetition}`);
     }
   }, [selectedCompetition, competitions]);
-
-  useEffect(() => {
-    if (status === "unauthenticated") {
-      sessionStorage.setItem('loginRedirect', '/pages/Scoreboard');
-      router.push("/pages/login");
-    } else if (status === "authenticated") {
-      fetchCompetitions();
-    }
-  }, [status, router, fetchCompetitions]);
 
   const getRankIcon = (rank: number) => {
     switch (rank) {
@@ -224,7 +224,7 @@ function ScoreboardContent() {
   const judgedParticipants = selectedComp?.scoredParticipantIds?.length ?? 0;
   const totalParticipants = selectedComp?.participants?.length ?? 0;
 
-  if (status === "loading" || loading) {
+  if (loading) {
     return (
       <div className="flex justify-center items-center h-screen">
         <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-blue-500"></div>
@@ -235,7 +235,7 @@ function ScoreboardContent() {
   if (error || !competitions.length) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
-        <p className="text-red-500 text-lg font-semibold mb-4">{error || t("noCompetitionsAvailable")}</p>
+        <p className="text-red-confusion-500 text-lg font-semibold mb-4">{error || t("noCompetitionsAvailable")}</p>
         <Button
           onClick={() => fetchCompetitions()}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
@@ -265,19 +265,19 @@ function ScoreboardContent() {
         <div className="mb-8 animate-fade-in">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => router.push("/pages/Dashboard")}
-              className={`hover:shadow-lg transition flex items-center ${
-                theme === "dark"
-                  ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700 text-gray-200"
-                  : "bg-white border-gray-200 hover:bg-gray-50 text-gray-700"
-              }`}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              {t("back")}
-            </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push("/pages/Dashboard")}
+                className={`hover:shadow-lg transition flex items-center ${
+                  theme === "dark"
+                    ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700 text-gray-200"
+                    : "bg-white border-gray-200 hover:bg-gray-50 text-gray-700"
+                }`}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                {t("back")}
+              </Button>
               <div>
                 <h1 className={`text-3xl font-semibold ${theme === "dark" ? "text-white" : "text-gray-900"} mb-2`}>
                   {t("leaderboard")}
@@ -302,7 +302,7 @@ function ScoreboardContent() {
                   theme === "dark"
                     ? "bg-gray-700/20 border-gray-600 hover:bg-gray-700 text-gray-300"
                     : "bg-white border-gray-200 hover:bg-gray-50 text-gray-600"
-                }`} // ✅ properly closed the template literal and expression
+                }`}
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 {t("refresh")}

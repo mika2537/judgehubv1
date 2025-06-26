@@ -12,7 +12,7 @@ import { Star, Send, Clock, User, ArrowLeft, CheckCircle } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
 import { useLanguage } from "@/context/languageContext";
 import { useTheme } from "@/app/components/ThemeProvider";
-import { Competition, Participant } from "@/lib/types";
+import { Competition } from "@/lib/types";
 
 declare module "next-auth" {
   interface User {
@@ -43,7 +43,6 @@ const Judge = () => {
   const [existingScores, setExistingScores] = useState<
     Record<string, { score: number; comment: string }>
   >({});
-  const [hasScored, setHasScored] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -201,7 +200,7 @@ const Judge = () => {
             (comp.scoredParticipantIds ?? []).includes(participant.id)
           ) {
             toast({
-              title: t("infoTitle"),
+              title: t("alreadyScoredTitle"),
               description: t("alreadyScored", { name: participant.name }),
               variant: "default",
             });
@@ -244,10 +243,18 @@ const Judge = () => {
   const isScored = participant
     ? (competition?.scoredParticipantIds || []).includes(participant.id)
     : false;
-  const hasScoredFlag = isScored;
 
   const handleScoreChange = (criteriaId: string, value: number[]) => {
-    if (!participant || isScored) return;
+    if (!participant || isScored) {
+      if (isScored) {
+        toast({
+          title: t("alreadyScoredTitle"),
+          description: t("cannotRescore", { name: participant?.name || t("unknownParticipant") }),
+          variant: "destructive",
+        });
+      }
+      return;
+    }
     setScores((prev) => ({
       ...prev,
       [`${participant.id}-${criteriaId}`]: value[0],
@@ -255,7 +262,16 @@ const Judge = () => {
   };
 
   const handleCommentChange = (criteriaId: string, comment: string) => {
-    if (!participant || isScored) return;
+    if (!participant || isScored) {
+      if (isScored) {
+        toast({
+          title: t("alreadyScoredTitle"),
+          description: t("cannotRescore", { name: participant?.name || t("unknownParticipant") }),
+          variant: "destructive",
+        });
+      }
+      return;
+    }
     setComments((prev) => ({
       ...prev,
       [`${participant.id}-${criteriaId}`]: comment,
@@ -306,7 +322,6 @@ const Judge = () => {
         description: t("scoresSubmitted"),
         variant: "default",
       });
-      setHasScored(true);
 
       const res = await fetch("/api/judge", {
         method: "GET",
@@ -464,19 +479,17 @@ const Judge = () => {
         <div className="mb-8 animate-fade-in">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-4">
-              <Button
+            <Button
                 variant="outline"
                 size="sm"
                 onClick={() => router.push("/pages/Dashboard")}
-                className={`hover:shadow-lg transition ${borderColor(
-                  "border-gray-600",
-                  "border-gray-200"
-                )} ${bgColor(
-                  "bg-gray-700/80 hover:bg-gray-700",
-                  "bg-white hover:bg-gray-50"
-                )} text-2xl py-3 px-6`}
+                className={`hover:shadow-lg transition flex items-center ${
+                  theme === "dark"
+                    ? "bg-gray-700/80 border-gray-600 hover:bg-gray-700 text-gray-200"
+                    : "bg-white border-gray-200 hover:bg-gray-50 text-gray-700"
+                }`}
               >
-                <ArrowLeft className="h-5 w-5 mr-2" />
+                <ArrowLeft className="h-4 w-4 mr-2" />
                 {t("back")}
               </Button>
               <div>
@@ -598,54 +611,57 @@ const Judge = () => {
             </Card>
 
             <Card
-              className={`backdrop-blur-sm border-0 shadow-xl hover:shadow-lg transition-all duration-300 ${bgColor(
+              className={`backdrop-blur-sm border-1 shadow-xl hover:shadow-lg transition-all duration-300 ${bgColor(
                 "bg-gray-800/90",
                 "bg-white/95"
               )} ${borderColor("border-gray-700", "border-gray-200")}`}
             >
               <CardHeader>
-                <CardTitle
+                 <CardTitle
                   className={`text-3xl font-semibold ${textColor("text-white", "text-gray-900")}`}
                 >
                   {t("participants")}
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {Array.isArray(competition.participants) &&
                     competition.participants.map((p, index) => {
-                      const isScored = (competition.scoredParticipantIds || []).includes(
-                        p.id
-                      );
+                      const isScored = (competition.scoredParticipantIds || []).includes(p.id);
+                      const scoreCount = Object.keys(existingScores).filter((key) =>
+                        key.startsWith(p.id)
+                      ).length;
+                      const totalCriteria = competition.criteria?.length ?? 0;
                       return (
                         <Button
-                          key={p.id}
-                          variant={
-                            selectedParticipantIndex === index
-                              ? "default"
-                              : "outline"
-                          }
-                          className={`w-full justify-start text-left text-2xl transition-all duration-200 py-3 px-6 ${
-                            isScored
-                              ? bgColor(
-                                  "bg-gray-700 opacity-50",
-                                  "bg-gray-200 opacity-50"
-                                )
-                              : "hover:scale-[1.02]"
-                          } ${bgColor("hover:bg-gray-700", "hover:bg-gray-100")}`}
-                          onClick={() => {
-                            setSelectedParticipantIndex(index);
-                            setScores({});
-                            setComments({});
-                          }}
-                          title={
-                            isScored ? t("alreadyScored", { name: p.name }) : ""
-                          }
-                        >
+  key={p.id}
+  variant="ghost"
+  className={`w-full justify-start text-left text-base md:text-lg py-3 px-4 rounded-lg border transition-all duration-200
+    ${
+      selectedParticipantIndex === index
+        ? "border-2 border-blue-500 bg-blue-500/10 dark:bg-blue-500/20"
+        : "border border-gray-400 dark:border-gray-600 hover:scale-[1.01]"
+    }
+    ${isScored ? "opacity-60 cursor-not-allowed" : ""}
+  `}
+  onClick={() => {
+    setSelectedParticipantIndex(index);
+    setScores({});
+    setComments({});
+    if (isScored) {
+      toast({
+        title: t("alreadyScoredTitle"),
+        description: t("cannotRescore", { name: p.name }),
+        variant: "destructive",
+      });
+    }
+  }}
+  title={isScored ? t("alreadyScored", { name: p.name }) : ""}
+>
                           <div className="flex items-center justify-between w-full">
                             <div>
                               <div
-                                className={`font-medium text-2xl ${textColor(
+                                className={`font-medium text-xl ${textColor(
                                   "text-white",
                                   "text-gray-900"
                                 )}`}
@@ -658,8 +674,20 @@ const Judge = () => {
                                   "text-gray-600"
                                 )}`}
                               >
-                                {p.performance || t("noPerformance")}
                               </div>
+                              {isScored && (
+                                <div
+                                  className={`text-sm ${textColor(
+                                    "text-gray-500",
+                                    "text-gray-500"
+                                  )}`}
+                                >
+                                  {t("scoresGiven", {
+                                    count: scoreCount.toString(),
+                                    total: totalCriteria.toString(),
+                                  })}
+                                </div>
+                              )}
                             </div>
                             {isScored && (
                               <CheckCircle className="h-5 w-5 text-green-600" />
@@ -704,6 +732,7 @@ const Judge = () => {
                     {t("scoreSummaryWithChecks", {
                       count: Object.keys(existingScores).length.toString(),
                       total: competition.criteria.length.toString(),
+                      name: participant.name,
                     })}
                   </div>
                 )}
@@ -746,10 +775,11 @@ const Judge = () => {
                           )}
                           <Badge
                             variant="outline"
-                            className={`text-lg py-2 px-3 ${borderColor(
-                              "border-gray-600",
-                              "border-gray-200"
-                            )}`}
+                            className={`text-lg py-2 px-3 transition ${
+                              theme === "dark"
+                                ? "bg-gray-700/80 border-gray-600 text-gray-200"
+                                : "bg-white border-gray-200 text-gray-700"
+                            }`}
                           >
                             {t("weight", { value: criteria.weight.toString() })}
                           </Badge>
@@ -828,27 +858,27 @@ const Judge = () => {
                   })}
 
                   <div className="flex justify-end space-x-4 pt-6">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setScores({});
-                        setComments({});
-                      }}
-                      disabled={isScored}
-                      className={`text-2xl py-3 px-6 ${borderColor(
-                        "border-gray-600",
-                        "border-gray-200"
-                      )} ${bgColor(
-                        "bg-gray-700/80 hover:bg-gray-700",
-                        "bg-white hover:bg-gray-50"
-                      )}`}
-                    >
-                      {t("clearScores")}
-                    </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setScores({});
+                      setComments({});
+                    }}
+                    disabled={isScored}
+                    className={`text-2xl py-3 px-6 
+                      ${borderColor("border-gray-600", "border-gray-200")} 
+                      ${bgColor("bg-gray-700/80 hover:bg-gray-700", "bg-white hover:bg-gray-50")}
+                      ${textColor("text-white", "text-gray-700")}`}
+                  >
+                    {t("clearScores")}
+                  </Button>
                     <Button
                       onClick={handleSubmitScores}
-                      className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 hover:shadow-lg text-2xl text-white py-3 px-6"
+                      className={`bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 transition-all duration-200 hover:shadow-lg text-2xl text-white py-3 px-6 ${
+                        isScored ? "opacity-50 cursor-not-allowed" : ""
+                      }`}
                       disabled={isScored}
+                      title={isScored ? t("cannotRescore", { name: participant.name }) : ""}
                     >
                       <Send className="h-5 w-5 mr-2" />
                       {t("submitScores")}

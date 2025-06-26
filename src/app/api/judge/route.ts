@@ -50,8 +50,8 @@ export async function GET(req: NextRequest) {
     const { db } = await connectToDb();
 
     // Filter competitions by judgeId
-    const competitionDocs = await db
-      .collection("competitions")
+    const competitionDocs: Competition[] = await db
+      .collection<Competition>("competitions")
       .find({})
       .toArray();
 
@@ -61,12 +61,12 @@ export async function GET(req: NextRequest) {
       _id: doc._id.toString(),
       name: doc.name,
       status: doc.status,
-      participants: (doc.participants || []).map((p: any) => ({
+      participants: (doc.participants || []).map((p: Participant) => ({
         id: p.id,
         name: p.name,
         performance: p.performance || "",
       })),
-      criteria: (doc.criteria || []).map((c: any) => ({
+      criteria: (doc.criteria || []).map((c: Criterion) => ({
         id: c.id,
         name: c.name,
         weight: c.weight || 0,

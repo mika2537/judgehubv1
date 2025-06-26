@@ -467,3 +467,17 @@ body {
 
 @media(max-width: 576px) {
 }
+
+.slider {
+  --slider-track-height: 6px;
+  --slider-thumb-size: 24px; /* Adjust if needed for larger ball */
+}
+
+.slider-track {
+  border-radius: 9999px; /* Ensure full roundness */
+}
+
+.slider-thumb {
+  top: 50%;
+  margin-left: -12px; /* Half of thumb size to center */
+}

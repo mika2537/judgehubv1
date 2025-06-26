@@ -3,20 +3,56 @@ import { ObjectId, ClientSession } from "mongodb";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/authOptions";
 import { connectToDb } from "@/lib/mongodb";
-import Scoreboard from "../../pages/Scoreboard/page";
+
+// Define interfaces for better type safety
+interface User {
+  _id: ObjectId;
+  name: string;
+  email: string;
+  role: string;
+}
+
+interface Judge {
+  id: string;
+  [key: string]: unknown; // Adjust based on actual judge properties
+}
+
+interface Participant {
+  id: string;
+  [key: string]: unknown; // Adjust based on actual participant properties
+}
+
+interface Criterion {
+  id: string;
+  [key: string]: unknown; // Adjust based on actual criterion properties
+}
+
+interface Competition {
+  name: string;
+  description: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+  judges: Judge[];
+  participants: Participant[];
+  criteria: Criterion[];
+}
 
 export async function GET(request: Request) {
   try {
     const url = new URL(request.url);
     const search = url.searchParams.get("search");
     const role = url.searchParams.get("role");
-    const competitionId = url.searchParams.get("competitionId"); // Optional filter
+    const competitionId = url.searchParams.get("competitionId");
 
-    const { client, db } = await connectToDb();
+    const { db } = await connectToDb(); // Removed unused `client`
 
     if (role === "judge") {
-      // Search for users with judge role
-      const query: any = { role: "judge" };
+      // Define query type for MongoDB
+      const query: {
+        role: string;
+        $or?: Array<{ [key: string]: { $regex: string; $options: string } }>;
+      } = { role: "judge" };
       if (search) {
         query.$or = [
           { name: { $regex: search, $options: "i" } },
@@ -24,7 +60,7 @@ export async function GET(request: Request) {
         ];
       }
 
-      const judges = await db.collection("users").find(query).toArray();
+      const judges = await db.collection<User>("users").find(query).toArray();
       return NextResponse.json(
         judges.map((judge) => ({
           id: judge._id.toString(),
@@ -36,7 +72,7 @@ export async function GET(request: Request) {
     }
 
     // Default behavior - fetch competitions with their scoreboards
-    let competitionQuery = {};
+    let competitionQuery: { _id?: ObjectId } = {};
     if (competitionId) {
       competitionQuery = { _id: new ObjectId(competitionId) };
     }
@@ -46,7 +82,6 @@ export async function GET(request: Request) {
       .find(competitionQuery)
       .toArray();
 
-    // Get scoreboards for these competitions
     const competitionIds = competitions.map((c) => new ObjectId(c._id));
     const scoreboards = await db
       .collection("scoreboard")
@@ -55,7 +90,6 @@ export async function GET(request: Request) {
       })
       .toArray();
 
-    // Combine competitions with their scoreboards
     const competitionsWithScores = competitions.map((competition) => {
       const competitionScoreboards = scoreboards.filter(
         (scoreboard) =>
@@ -65,7 +99,6 @@ export async function GET(request: Request) {
       return {
         ...competition,
         scoreboards: competitionScoreboards,
-        // Optional: Calculate aggregate scores
         totalScores: competitionScoreboards.reduce(
           (acc, curr) => acc + (curr.score || 0),
           0
@@ -94,25 +127,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 });
     }
 
-    const competition = await request.json();
-    const { client, db } = await connectToDb();
+    const competition: Competition = await request.json();
+    const { db } = await connectToDb(); // Removed unused `client`
 
-    // Prepare competition data with proper ID handling
     const competitionData = {
       name: competition.name,
       description: competition.description,
       startDate: competition.startDate,
       endDate: competition.endDate,
       status: competition.status,
-      // Convert only valid ObjectIds, keep others as strings
-      judgeIds: competition.judges.map((j: any) =>
+      judgeIds: competition.judges.map((j: Judge) =>
         ObjectId.isValid(j.id) ? new ObjectId(j.id) : j.id
       ),
-      // Keep participant IDs as they are (could be UUIDs or other formats)
-      participantIds: competition.participants.map((p: any) => p.id),
-      // Keep criterion IDs as they are (assuming they're UUIDs)
-      criterionIds: competition.criteria.map((c: any) => c.id),
-      // Optionally store the full objects if needed
+      participantIds: competition.participants.map((p: Participant) => p.id),
+      criterionIds: competition.criteria.map((c: Criterion) => c.id),
       judges: competition.judges,
       participants: competition.participants,
       criteria: competition.criteria,
@@ -137,6 +165,7 @@ export async function POST(request: Request) {
     );
   }
 }
+
 export async function DELETE(request: Request) {
   try {
     const session = await getServerSession(authOptions);
@@ -157,7 +186,7 @@ export async function DELETE(request: Request) {
     const competitionId = new ObjectId(id);
     const { client, db } = await connectToDb();
 
-    const clientSession = client.startSession();
+    const clientSession: ClientSession = client.startSession();
     try {
       await clientSession.withTransaction(async () => {
         const competition = await db
@@ -168,13 +197,11 @@ export async function DELETE(request: Request) {
           throw new Error("Competition not found");
         }
 
-        // Delete competition
         await db
           .collection("competitions")
           .deleteOne({ _id: competitionId }, { session: clientSession });
 
         // Delete related data if needed
-        // ... (your existing deletion logic)
       });
     } finally {
       await clientSession.endSession();

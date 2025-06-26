@@ -113,7 +113,7 @@ function CompetitionContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [competitions, setCompetitions] = useState<Competition[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -150,7 +150,7 @@ function CompetitionContent() {
       }
 
       const data = await res.json();
-      const formattedData: Competition[] = data.map((item: any) => ({
+      const formattedData: Competition[] = data.map((item: Competition) => ({
         _id: item._id?.toString(),
         name: item.name || t("unnamedCompetition"),
         description: item.description || "",
@@ -192,22 +192,14 @@ function CompetitionContent() {
     }
   }, [authStatus, session, router, toast, t, fetchCompetitions]);
 
-  useEffect(() => {
-    if (debouncedJudgeSearch.trim()) {
-      fetchAvailableJudges(debouncedJudgeSearch);
-    } else {
-      setAvailableJudges([]);
-    }
-  }, [debouncedJudgeSearch]);
-
-  const fetchAvailableJudges = async (searchTerm: string) => {
+  const fetchAvailableJudges = useCallback(async (searchTerm: string) => {
     setIsSearchingJudges(true);
     try {
       const res = await fetch(`/api/competitions?role=judge&search=${encodeURIComponent(searchTerm)}`);
       if (!res.ok) throw new Error(t("failedToFetchJudges"));
       const data = await res.json();
       setAvailableJudges(data);
-    } catch (err) {
+    } catch {
       toast({
         title: t("error"),
         description: t("failedToFetchJudges"),
@@ -216,7 +208,15 @@ function CompetitionContent() {
     } finally {
       setIsSearchingJudges(false);
     }
-  };
+  }, [t, toast]);
+
+  useEffect(() => {
+    if (debouncedJudgeSearch.trim()) {
+      fetchAvailableJudges(debouncedJudgeSearch);
+    } else {
+      setAvailableJudges([]);
+    }
+  }, [debouncedJudgeSearch, fetchAvailableJudges]);
 
   const handleCreateCompetition = useCallback(async () => {
     if (!newCompetition.name.trim()) {

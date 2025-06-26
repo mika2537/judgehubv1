@@ -3,18 +3,17 @@ import { MongoClient, ObjectId } from "mongodb";
 
 const uri = process.env.MONGODB_URI as string;
 
-let client: MongoClient;
-let clientPromise: Promise<MongoClient>;
+const client: MongoClient = new MongoClient(uri);
+const clientPromise: Promise<MongoClient> =
+  globalThis._mongoClientPromise ?? client.connect();
 
 if (!uri) {
   throw new Error("MONGODB_URI environment variable is not set");
 }
 
-if (!global._mongoClientPromise) {
-  client = new MongoClient(uri);
-  global._mongoClientPromise = client.connect();
+if (!globalThis._mongoClientPromise) {
+  globalThis._mongoClientPromise = clientPromise;
 }
-clientPromise = global._mongoClientPromise;
 
 interface ScoreInput {
   criterionId: string;
@@ -68,7 +67,7 @@ export async function POST(req: NextRequest) {
     let competitionObjectId;
     try {
       competitionObjectId = new ObjectId(competitionId);
-    } catch (e) {
+    } catch {
       return NextResponse.json(
         { error: "Invalid competitionId format" },
         { status: 400 }
@@ -79,8 +78,8 @@ export async function POST(req: NextRequest) {
     const db = client.db("judgehub");
 
     const competition = await db
-      .collection("competitions")
-      .findOne<Competition>({ _id: competitionObjectId });
+      .collection<Competition>("competitions")
+      .findOne({ _id: competitionObjectId });
 
     if (!competition) {
       return NextResponse.json(
@@ -113,7 +112,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         {
           scores: existingScores
-            ? existingScores.scores.map((s: any) => ({
+            ? existingScores.scores.map((s: ScoreInput) => ({
                 criterionId: s.criterionId,
                 score: s.score,
                 comment: s.comment || "",
@@ -233,8 +232,4 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-declare global {
-  var _mongoClientPromise: Promise<MongoClient> | undefined;
 }

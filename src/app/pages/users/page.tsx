@@ -45,7 +45,7 @@ function ManageUsersContent() {
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useLanguage();
-  const { theme, toggleTheme } = useTheme();
+  const { theme } = useTheme();
   const [users, setUsers] = useState<User[]>([]);
   const [error, setError] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(true);
