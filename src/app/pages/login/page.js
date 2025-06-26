@@ -36,7 +36,7 @@ export default function LoginPage() {
       error: "Please fill in all fields",
     },
     mn: {
-      loginTitle: "Жүжигчний системд нэвтрэх",
+      loginTitle: "JudgeHub-д системд нэвтрэх",
       loginDesc: "Нэвтрэх мэдээллээ оруулна уу",
       email: "И-мэйл",
       password: "Нууц үг",
